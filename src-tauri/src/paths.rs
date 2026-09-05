@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
+use tauri_plugin_shell::ShellExt;
 
 pub fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
@@ -24,39 +25,51 @@ pub fn default_library_dir() -> PathBuf {
 }
 
 pub fn sidecar_present(app: &AppHandle) -> bool {
-    app.shell_sidecar_hint()
+    sidecar_path(app).is_some() || app.shell().sidecar("courdl-engine").is_ok()
 }
 
-trait ShellHint {
-    fn shell_sidecar_hint(&self) -> bool;
-}
+/// Tauri copies externalBin next to the app exe (not into resource_dir).
+pub fn sidecar_path(app: &AppHandle) -> Option<PathBuf> {
+    let triple = target_triple();
+    let names: Vec<String> = if cfg!(windows) {
+        vec![
+            format!("courdl-engine-{triple}.exe"),
+            "courdl-engine.exe".into(),
+        ]
+    } else {
+        vec![
+            format!("courdl-engine-{triple}"),
+            "courdl-engine".into(),
+        ]
+    };
 
-impl ShellHint for AppHandle {
-    fn shell_sidecar_hint(&self) -> bool {
-        // Sidecar is bundled at runtime; in dev the file must exist under binaries/.
-        let triple = tauri_utils_triple();
-        let exe = if cfg!(windows) {
-            format!("courdl-engine-{triple}.exe")
-        } else {
-            format!("courdl-engine-{triple}")
-        };
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("binaries")
-            .join(&exe);
-        if dev.is_file() {
-            return true;
+    let mut dirs = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            dirs.push(dir.to_path_buf());
         }
-        if let Ok(res) = self.path().resource_dir() {
-            let bundled = res.join(&exe);
-            if bundled.is_file() {
-                return true;
+    }
+    if let Ok(res) = app.path().resource_dir() {
+        dirs.push(res.clone());
+        dirs.push(res.join("binaries"));
+        if let Some(parent) = res.parent() {
+            dirs.push(parent.to_path_buf());
+        }
+    }
+    dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"));
+
+    for dir in dirs {
+        for name in &names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
             }
         }
-        false
     }
+    None
 }
 
-fn tauri_utils_triple() -> String {
+fn target_triple() -> String {
     let arch = std::env::consts::ARCH;
     let os = std::env::consts::OS;
     match (arch, os) {

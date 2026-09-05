@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.2] - 2026-09-05
+
+### Fixed
+- Find the bundled engine next to `CourDL.exe` on Windows (NSIS does not put sidecars in `resources/`).
+
 ## [0.1.0] - 2026-09-04
 
 ### Added

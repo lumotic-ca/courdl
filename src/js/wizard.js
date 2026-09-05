@@ -29,7 +29,6 @@ export function renderPrereqs(report, listEl, notesEl) {
 
 export function wizardNeeded(report, settings) {
   if (!settings.wizardComplete) return true;
-  if (!report.sidecar) return true;
   if (!report.cookies) return true;
   if (report.platform === "windows" && !report.webview2) return true;
   return false;

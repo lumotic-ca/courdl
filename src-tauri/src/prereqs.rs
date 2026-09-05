@@ -3,7 +3,7 @@ use tauri::AppHandle;
 
 use crate::auth::cookies_exist;
 use crate::error::{ok, Envelope};
-use crate::paths::{cookies_path, sidecar_present};
+use crate::paths::{cookies_path, sidecar_path, sidecar_present};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,9 +19,13 @@ pub struct PrerequisiteReport {
 pub fn evaluate(app: &AppHandle) -> PrerequisiteReport {
     let mut notes = Vec::new();
     let sidecar = sidecar_present(app);
-    if !sidecar {
+    if let Some(path) = sidecar_path(app) {
+        notes.push(format!("Engine: {}", path.display()));
+    } else if sidecar {
+        notes.push("Engine sidecar is registered with the app shell.".into());
+    } else {
         notes.push(
-            "CourDL engine sidecar is missing. Reinstall the app, or run scripts/link-dev-sidecar.sh in development."
+            "CourDL engine was not found next to the app. Reinstall from the GitHub Release .exe."
                 .into(),
         );
     }
