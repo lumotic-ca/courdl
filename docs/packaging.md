@@ -23,8 +23,7 @@ GitHub Actions workflow `.github/workflows/release-windows-nsis.yml`:
 
 1. Install Python 3.12 and PyInstaller
 2. Build the sidecar
-3. `npm ci` and `npx tauri build --bundles nsis`
-4. Upload the NSIS `.exe` to a GitHub Release
+The NSIS `.exe` lands at `target/release/bundle/nsis/` when using the repo-root Cargo workspace (not `src-tauri/target`).
 
 The installer is **unsigned**. Windows SmartScreen will warn until an Authenticode cert is added.
 

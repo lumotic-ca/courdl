@@ -53,13 +53,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: CourDL-windows-nsis
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: |
+            target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: src-tauri/target/release/bundle/nsis/*.exe
+          files: |
+            target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -69,7 +74,9 @@ jobs:
         with:
           tag_name: ${{ format('v0.1.0-test-{0}', github.run_number) }}
           name: CourDL Windows test ${{ github.run_number }}
-          files: src-tauri/target/release/bundle/nsis/*.exe
+          files: |
+            target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
