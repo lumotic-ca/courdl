@@ -14,8 +14,8 @@ Not a Coursera clone. It does not unlock quizzes, labs, or graded projects.
 ## Cookies
 
 1. Log in to Coursera in a browser.
-2. Export **Netscape** cookies for `.coursera.org` (Cookie-Editor or "Get cookies.txt LOCALLY").
-3. In CourDL, import that `cookies.txt`. `CAUTH` is required.
+2. Export cookies for `.coursera.org` (Cookie-Editor Netscape or JSON, or "Get cookies.txt LOCALLY"). HttpOnly rows are fine.
+3. In CourDL, import that file. `CAUTH` is required.
 
 Cookies are login-equivalent. They usually last about two weeks. Never commit them.
 

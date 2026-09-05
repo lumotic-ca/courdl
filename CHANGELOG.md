@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.3] - 2026-09-05
+
+### Fixed
+- Accept Cookie-Editor `#HttpOnly_` Netscape rows and JSON cookie exports. Rewrite them to classic Netscape so `CAUTH` is visible to dl_coursera.
+
 ## [0.1.2] - 2026-09-05
 
 ### Fixed
