@@ -1,0 +1,14 @@
+{
+  "name": "courdl",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Desktop GUI for enrolled Coursera lecture downloads",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build --bundles nsis",
+    "sidecar:dev": "bash scripts/link-dev-sidecar.sh"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0"
+  }
+}

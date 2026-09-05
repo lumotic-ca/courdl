@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CourDL</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="init-overlay" class="init-overlay" role="status" aria-live="polite">
+      <div class="overlay-card">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Checking CourDL…</p>
+      </div>
+    </div>
+
+    <div id="busy-overlay" class="busy-overlay hidden" role="status" aria-live="polite">
+      <div class="overlay-card">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Download in progress. You can watch the log below.</p>
+      </div>
+    </div>
+
+    <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+      <div class="wizard-card">
+        <h2 id="wizard-title">Set up CourDL</h2>
+        <p class="muted">
+          Import Netscape cookies from a logged-in Coursera session (CAUTH is required).
+          Cookies are login-equivalent and usually expire in about two weeks.
+          Lectures, subtitles, and readings download to disk. Quizzes and graded work stay on Coursera.
+        </p>
+        <pre id="wizard-log" class="wizard-log" aria-live="polite"></pre>
+        <div class="wizard-actions">
+          <button type="button" id="wizard-import" class="primary">Import cookies.txt</button>
+          <button type="button" id="wizard-folder" class="secondary">Choose library folder</button>
+          <button type="button" id="wizard-continue" class="secondary">Continue to CourDL</button>
+        </div>
+      </div>
+    </div>
+
+    <header>
+      <h1>CourDL</h1>
+      <p>Download enrolled Coursera lectures and readings for offline study.</p>
+    </header>
+
+    <section id="prereq-panel" class="panel">
+      <h2>Status</h2>
+      <ul id="prereq-list"></ul>
+      <p id="prereq-notes" class="muted"></p>
+      <p id="engine-meta" class="muted"></p>
+      <p class="muted">Library: <span id="library-path"></span></p>
+      <div class="prereq-actions">
+        <button type="button" id="refresh-prereqs">Refresh checks</button>
+        <button type="button" id="import-cookies" class="secondary">Re-import cookies</button>
+        <button type="button" id="change-folder" class="secondary">Change folder</button>
+        <button type="button" id="open-wizard" class="secondary">Open setup</button>
+      </div>
+    </section>
+
+    <form id="download-form" class="panel">
+      <h2>Download</h2>
+      <label>
+        Course, specialization, or professional certificate URL or slug
+        <input id="url-input" name="url" required placeholder="https://www.coursera.org/learn/…" />
+      </label>
+      <div class="checks">
+        <label><input type="checkbox" id="skip-existing" checked /> Skip if the folder already exists</label>
+        <label><input type="checkbox" id="run-beautify" checked /> Beautify folder names after download</label>
+      </div>
+      <div class="actions">
+        <button type="submit" id="download-btn">Download</button>
+        <button type="button" id="cancel-btn" class="secondary" disabled>Cancel</button>
+        <button type="button" id="open-library" class="secondary">Open library</button>
+      </div>
+      <p id="job-status" class="muted" aria-live="polite"></p>
+      <p id="progress-line" class="progress-line" aria-live="polite"></p>
+    </form>
+
+    <section class="panel">
+      <h2>Library</h2>
+      <ul id="library-list" class="library-list"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Log</h2>
+      <pre id="log" aria-live="polite"></pre>
+    </section>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

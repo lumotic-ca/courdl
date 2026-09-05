@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a format example only. Do not use this file.
+# Real cookies must come from your logged-in browser session.
+.coursera.org	TRUE	/	TRUE	1999999999	CAUTH	replace-with-real-value

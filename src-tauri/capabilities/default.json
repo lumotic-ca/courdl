@@ -1,0 +1,31 @@
+{
+  "identifier": "default",
+  "description": "CourDL main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "opener:default",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/courdl-engine",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/courdl-engine",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
+  ]
+}

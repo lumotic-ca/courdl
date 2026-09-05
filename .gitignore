@@ -1,0 +1,26 @@
+.idea
+.vscode
+.env
+.env.*
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+engine/dist/
+
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/courdl-engine-*
+
+cookies.txt
+**/cookies.txt
+courses/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
