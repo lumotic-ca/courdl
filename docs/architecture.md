@@ -109,6 +109,9 @@ Handmade bundles that are not one Coursera product still use `scripts/batch-from
 
 See [packaging.md](packaging.md). Windows CI builds the sidecar with PyInstaller, names it `courdl-engine-x86_64-pc-windows-msvc.exe`, then `tauri build --bundles nsis`. Tag `v*` publishes the installer. The installer is unsigned; SmartScreen will warn.
 
-## Jupiter
+## Jupiter and zots-labs
 
-Linux host notes and the older `~/coursera` wrapper live in the jupiter repo: [documentation/coursera-offline.md](https://github.com/lumotic-ca/jupiter/blob/main/documentation/coursera-offline.md). Beautify and cookie rules in this repo's engine are the source of truth going forward.
+- Host paths, Linux batch, leftover `~/coursera` CLI: [jupiter documentation/coursera-offline.md](https://github.com/lumotic-ca/jupiter/blob/main/documentation/coursera-offline.md)
+- Desktop product notes and development history: [zots-labs documentation/courdl.md](https://github.com/lumotic-ca/zots-labs/blob/main/documentation/courdl.md)
+
+Beautify and cookie rules in this repo's engine are the source of truth going forward.

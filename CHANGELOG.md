@@ -11,6 +11,7 @@
 - `scripts/batch-from-links.py` is resumable (`_batch-state.json`), stoppable (`_batch.stop`), and runs up to 10 course jobs at once.
 - Empty `.cache` folders no longer count as a finished course. Skip-existing requires mp4, srt, or html outside `.cache`.
 - Course crawls that Coursera reports as empty specializations are treated as courses.
+- Cross-links: Jupiter host runbook and zots-labs desktop notes.
 
 ## [0.1.3] - 2026-09-05
 
