@@ -118,6 +118,31 @@ def test_resolve_product_expands_course_ids():
         "python-operating-system",
     ]
     assert product["courses"][0]["url"] == "https://www.coursera.org/learn/python-crash-course"
+    assert product["courseCount"] == 2
+    assert product["preview"] == "2 courses in this certificate"
+
+
+def test_course_preview_counts_modules():
+    def fake_get(_sess, url, params):
+        if "CourseMaterials" in url:
+            return {
+                "linked": {
+                    "onDemandCourseMaterialModules.v1": [
+                        {"name": "a"},
+                        {"name": "b"},
+                        {"name": "c"},
+                    ]
+                }
+            }
+        return {}
+
+    with patch("courdl_engine.catalog._get_json", side_effect=fake_get):
+        product = resolve_product(
+            "https://www.coursera.org/learn/python-crash-course?specialization=google-it-automation"
+        )
+    assert product["kind"] == "course"
+    assert product["moduleCount"] == 3
+    assert product["preview"] == "3 modules in this course"
 
 
 def test_cookies_reject_placeholder(tmp_path: Path):

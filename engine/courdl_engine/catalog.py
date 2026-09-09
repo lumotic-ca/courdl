@@ -11,6 +11,7 @@ from courdl_engine.slug import SlugError, slug_from_input
 UA = "Mozilla/5.0 (compatible; CourDL/1.0)"
 SPEC_URL = "https://www.coursera.org/api/onDemandSpecializations.v1"
 COURSE_URL = "https://www.coursera.org/api/onDemandCourses.v1"
+MATERIALS_URL = "https://www.coursera.org/api/onDemandCourseMaterials.v2/"
 
 _PATH = re.compile(
     r"/(learn|specializations|professional-certificates)/([^/?#]+)",
@@ -90,18 +91,67 @@ def _courses_by_ids(sess: requests.Session, ids: list[str]) -> dict[str, dict[st
     return out
 
 
+def count_modules(sess: requests.Session, slug: str) -> int | None:
+    data = _get_json(
+        sess,
+        MATERIALS_URL,
+        {
+            "q": "slug",
+            "slug": slug,
+            "includes": "modules",
+            "fields": "moduleIds,onDemandCourseMaterialModules.v1(name,slug)",
+            "showLockedItems": "true",
+        },
+    )
+    linked = data.get("linked") or {}
+    mods = linked.get("onDemandCourseMaterialModules.v1") or []
+    if mods:
+        return len(mods)
+    els = data.get("elements") or []
+    ids = (els[0].get("moduleIds") if els else None) or []
+    return len(ids) if ids else None
+
+
+def _with_preview(product: dict[str, Any], sess: requests.Session | None = None) -> dict[str, Any]:
+    kind = product.get("kind") or "course"
+    courses = product.get("courses") or []
+    if kind in ("professional-certificate", "specialization") and len(courses) >= 1:
+        n = len(courses)
+        label = "certificate" if kind == "professional-certificate" else "specialization"
+        word = "course" if n == 1 else "courses"
+        product["courseCount"] = n
+        product["preview"] = f"{n} {word} in this {label}"
+        return product
+    slug = product.get("slug") or (courses[0].get("slug") if courses else "")
+    n = count_modules(sess or _session(), slug) if slug else None
+    if n:
+        word = "module" if n == 1 else "modules"
+        product["moduleCount"] = n
+        product["preview"] = f"{n} {word} in this course"
+    return product
+
+
 def resolve_product(value: str) -> dict[str, Any]:
     """Turn a Coursera URL or slug into a course or an expanded certificate/specialization."""
     kind, slug = classify_input(value)
     sess = _session()
 
     if kind == "course":
-        return {
-            "kind": "course",
-            "slug": slug,
-            "name": slug,
-            "courses": [{"slug": slug, "name": slug, "url": f"https://www.coursera.org/learn/{slug}"}],
-        }
+        return _with_preview(
+            {
+                "kind": "course",
+                "slug": slug,
+                "name": slug,
+                "courses": [
+                    {
+                        "slug": slug,
+                        "name": slug,
+                        "url": f"https://www.coursera.org/learn/{slug}",
+                    }
+                ],
+            },
+            sess,
+        )
 
     spec = _spec_element(sess, slug)
     if spec:
@@ -127,23 +177,35 @@ def resolve_product(value: str) -> dict[str, Any]:
                 f"Certificate or specialization '{slug}' listed courses, but none resolved to /learn/ slugs yet."
             )
         product_kind = kind if kind in ("specialization", "professional-certificate") else "specialization"
-        return {
-            "kind": product_kind,
-            "slug": spec.get("slug") or slug,
-            "name": spec.get("name") or slug,
-            "tagline": spec.get("tagline") or "",
-            "courses": courses,
-            "unresolvedCourseIds": missing,
-        }
+        return _with_preview(
+            {
+                "kind": product_kind,
+                "slug": spec.get("slug") or slug,
+                "name": spec.get("name") or slug,
+                "tagline": spec.get("tagline") or "",
+                "courses": courses,
+                "unresolvedCourseIds": missing,
+            },
+            sess,
+        )
 
     if kind in ("specialization", "professional-certificate"):
         raise CatalogError(
             f"No published course list for '{slug}'. The product may still be pre-enroll, or Coursera has not attached courseIds."
         )
 
-    return {
-        "kind": "course",
-        "slug": slug,
-        "name": slug,
-        "courses": [{"slug": slug, "name": slug, "url": f"https://www.coursera.org/learn/{slug}"}],
-    }
+    return _with_preview(
+        {
+            "kind": "course",
+            "slug": slug,
+            "name": slug,
+            "courses": [
+                {
+                    "slug": slug,
+                    "name": slug,
+                    "url": f"https://www.coursera.org/learn/{slug}",
+                }
+            ],
+        },
+        sess,
+    )

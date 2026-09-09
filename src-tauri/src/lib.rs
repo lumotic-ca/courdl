@@ -28,6 +28,7 @@ pub fn run() {
             auth::import_cookies,
             download::check_cookies,
             download::engine_version,
+            download::resolve_preview,
             download::start_download,
             download::cancel_download,
             download::get_settings,

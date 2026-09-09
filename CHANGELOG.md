@@ -4,9 +4,10 @@
 
 ### Added
 - Certificate and specialization URLs expand to every `/learn/` course via Coursera catalog APIs, then each course downloads as today.
-- `courdl-engine resolve --pretty --input` prints the course list.
-- Parallel file workers (default 4) inside `dl_coursera` (upstream hardcodes 1).
-- Docs for setup, sidecar layout, cookie normalization, and `scripts/batch-from-links.py`.
+- URL preview: `{n} courses in this certificate` or `{n} modules in this course` after paste.
+- `courdl-engine resolve --pretty --input` prints the course list and preview line.
+- Parallel file workers (default 4 in the app, 3 in the batch script) inside `dl_coursera`.
+- `scripts/batch-from-links.py` is resumable (`_batch-state.json`), stoppable (`_batch.stop`), and runs up to 10 course jobs at once.
 
 ## [0.1.3] - 2026-09-05
 

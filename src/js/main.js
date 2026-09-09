@@ -20,11 +20,39 @@ const jobStatus = document.getElementById("job-status");
 const engineMeta = document.getElementById("engine-meta");
 const libraryPathEl = document.getElementById("library-path");
 const urlInput = document.getElementById("url-input");
+const urlPreview = document.getElementById("url-preview");
 const skipExisting = document.getElementById("skip-existing");
 const runBeautify = document.getElementById("run-beautify");
 const form = document.getElementById("download-form");
 
 let running = false;
+let previewTimer = 0;
+let previewSeq = 0;
+
+async function refreshUrlPreview() {
+  const value = urlInput.value.trim();
+  const seq = ++previewSeq;
+  if (!value) {
+    urlPreview.textContent = "";
+    return;
+  }
+  urlPreview.textContent = "Checking URL…";
+  try {
+    const product = await invoke("resolve_preview", { input: value });
+    if (seq !== previewSeq) return;
+    urlPreview.textContent = (product && product.preview) || "";
+  } catch (e) {
+    if (seq !== previewSeq) return;
+    urlPreview.textContent = e.message || "";
+  }
+}
+
+function scheduleUrlPreview() {
+  window.clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    refreshUrlPreview().catch(() => {});
+  }, 400);
+}
 
 async function loadAll() {
   const report = await invoke("check_prerequisites");
@@ -44,6 +72,7 @@ async function loadAll() {
     engineMeta.textContent = e.message || "Engine unavailable";
   }
   await refreshLibrary(libraryList).catch(() => {});
+  scheduleUrlPreview();
   return { report, settings };
 }
 
@@ -197,3 +226,8 @@ listen("download-finished", (ev) => {
 });
 
 onReady();
+
+urlInput.addEventListener("input", scheduleUrlPreview);
+urlInput.addEventListener("paste", () => {
+  window.setTimeout(scheduleUrlPreview, 0);
+});

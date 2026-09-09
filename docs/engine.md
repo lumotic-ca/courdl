@@ -47,7 +47,7 @@ CourDL rewrites the cookie file to classic Netscape before `MozillaCookieJar` / 
 
 ## Certificates and batch lists
 
-`resolve` / `download` expand a published `/professional-certificates/…` or `/specializations/…` URL to each `/learn/` course (syllabus order). Example: Google IT Automation yields `python-crash-course` first, matching `?specialization=google-it-automation` links.
+`resolve` / `download` expand a published `/professional-certificates/…` or `/specializations/…` URL to each `/learn/` course (syllabus order). The desktop URL field shows `{n} courses in this certificate` or `{n} modules in this course` from the same resolve call.
 
 Use `scripts/batch-from-links.py` when the list is handmade (courses mixed from several products, extras Coursera does not put in `courseIds`).
 
@@ -61,8 +61,11 @@ https://www.coursera.org/learn/security-and-authentication
 engine/.venv/bin/python ../scripts/batch-from-links.py \
   --links ~/Documents/Course\ Links.txt \
   --outdir ~/Documents/CourDL\ Courses \
-  --cookies ~/Documents/cookies.txt
+  --cookies ~/Documents/cookies.txt \
+  --jobs 4 --workers 3
 ```
+
+`--jobs` is concurrent courses (1-10, default 4). `--workers` is file threads per course (default 3). That keeps roughly a dozen Coursera connections. Touch `_batch.stop` in the outdir to halt after the current certificate. Resume is `_batch-state.json`.
 
 The script writes `cert-name/<course-slug>/`. Duplicate slugs across certs are copied from the first completed download instead of crawled again. `--skip-existing` is on by default.
 

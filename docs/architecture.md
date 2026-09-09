@@ -47,7 +47,7 @@ Download stays disabled until the engine sidecar is found, cookies exist on disk
 | `paths.rs` | App data, cookies path, library default, sidecar search next to `CourDL.exe` (NSIS does not put sidecars in `resources/`). |
 | `auth.rs` | File picker + copy into app data. |
 | `settings.rs` | Load/save `settings.json`. |
-| `download.rs` | `engine_version`, `check_cookies`, `start_download`, `cancel_download`. Spawns sidecar, forwards JSONL as `download-progress` and other lines as `download-log`. |
+| `download.rs` | `engine_version`, `resolve_preview`, `check_cookies`, `start_download`, `cancel_download`. Spawns sidecar, forwards JSONL as `download-progress`. Preview is a one-shot `resolve`. |
 | `library.rs` | Shallow scan of the library folder for course-like dirs (`README.md`, `.cache/crawl.json`, or numbered child folders). `open_library_folder` opens the parent library, not a single course. |
 
 One download at a time (`JobState`). Cancel kills the sidecar process.

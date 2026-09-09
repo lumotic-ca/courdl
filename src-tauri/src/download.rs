@@ -53,6 +53,31 @@ pub async fn engine_version(app: AppHandle) -> Envelope<serde_json::Value> {
 }
 
 #[tauri::command]
+pub async fn resolve_preview(app: AppHandle, input: String) -> Envelope<serde_json::Value> {
+    let trimmed = input.trim().to_string();
+    if trimmed.is_empty() {
+        return crate::error::ok_json(serde_json::json!({ "preview": "" }));
+    }
+    match sidecar_command(&app) {
+        Ok(cmd) => match cmd.args(["resolve", "--input", &trimmed]).output().await {
+            Ok(out) if out.status.success() => {
+                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                match serde_json::from_str(&text) {
+                    Ok(v) => crate::error::ok_json(v),
+                    Err(_) => crate::error::ok_json(serde_json::json!({"raw": text})),
+                }
+            }
+            Ok(out) => crate::error::err_json(
+                "resolve",
+                String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            ),
+            Err(e) => crate::error::err_json("engine", e.to_string()),
+        },
+        Err(e) => crate::error::err_json("sidecar", e),
+    }
+}
+
+#[tauri::command]
 pub async fn check_cookies(app: AppHandle) -> Envelope<serde_json::Value> {
     let path = match cookies_path(&app) {
         Ok(p) if p.is_file() => p,
