@@ -133,6 +133,8 @@ pub async fn start_download(
         outdir,
         "--input".into(),
         options.input.trim().to_string(),
+        "--workers".into(),
+        "4".into(),
     ];
     if options.skip_existing {
         args.push("--skip-existing".into());

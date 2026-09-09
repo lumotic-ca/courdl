@@ -1,5 +1,7 @@
 from pathlib import Path
+from unittest.mock import patch
 
+from courdl_engine.catalog import classify_input, resolve_product
 from courdl_engine.cookies import CookieError, check_cookies_file
 from courdl_engine.slug import SlugError, slug_from_input
 
@@ -66,6 +68,56 @@ def test_cookies_json_export(tmp_path: Path):
     info = check_cookies_file(p)
     assert info["hasCauth"] is True
     assert "\tCAUTH\t" in p.read_text(encoding="utf-8")
+
+
+def test_classify_cert_and_course_urls():
+    kind, slug = classify_input(
+        "https://www.coursera.org/professional-certificates/google-it-automation"
+    )
+    assert kind == "professional-certificate"
+    assert slug == "google-it-automation"
+    kind, slug = classify_input(
+        "https://www.coursera.org/learn/python-crash-course?specialization=google-it-automation"
+    )
+    assert kind == "course"
+    assert slug == "python-crash-course"
+    kind, slug = classify_input("google-it-automation")
+    assert kind == "unknown"
+    assert slug == "google-it-automation"
+
+
+def test_resolve_product_expands_course_ids():
+    spec = {
+        "elements": [
+            {
+                "name": "Google IT Automation with Python",
+                "slug": "google-it-automation",
+                "courseIds": ["id-a", "id-b"],
+            }
+        ]
+    }
+    courses = {
+        "elements": [
+            {"id": "id-b", "slug": "python-operating-system", "name": "Using Python"},
+            {"id": "id-a", "slug": "python-crash-course", "name": "Crash Course on Python"},
+        ]
+    }
+
+    def fake_get(_sess, url, params):
+        if "onDemandSpecializations" in url:
+            return spec
+        return courses
+
+    with patch("courdl_engine.catalog._get_json", side_effect=fake_get):
+        product = resolve_product(
+            "https://www.coursera.org/professional-certificates/google-it-automation"
+        )
+    assert product["kind"] == "professional-certificate"
+    assert [c["slug"] for c in product["courses"]] == [
+        "python-crash-course",
+        "python-operating-system",
+    ]
+    assert product["courses"][0]["url"] == "https://www.coursera.org/learn/python-crash-course"
 
 
 def test_cookies_reject_placeholder(tmp_path: Path):

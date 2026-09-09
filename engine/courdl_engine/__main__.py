@@ -9,9 +9,10 @@ import dl_coursera
 
 from courdl_engine import ENGINE_VERSION, DL_COURSERA_PIN
 from courdl_engine.beautify import beautify_tree, load_cookies
+from courdl_engine.catalog import CatalogError, resolve_product
 from courdl_engine.cookies import CookieError, check_cookies_file
 from courdl_engine.download import DownloadError, download
-from courdl_engine.slug import SlugError, slug_from_input
+from courdl_engine.slug import SlugError
 
 
 def _cmd_version(_args: argparse.Namespace) -> int:
@@ -39,11 +40,11 @@ def _cmd_check_cookies(args: argparse.Namespace) -> int:
 
 def _cmd_resolve(args: argparse.Namespace) -> int:
     try:
-        slug = slug_from_input(args.input)
-    except SlugError as exc:
+        product = resolve_product(args.input)
+    except (SlugError, CatalogError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps({"slug": slug}))
+    print(json.dumps(product, ensure_ascii=False, indent=2 if args.pretty else None))
     return 0
 
 
@@ -55,6 +56,7 @@ def _cmd_download(args: argparse.Namespace) -> int:
             args.input,
             skip_existing=args.skip_existing,
             no_beautify=args.no_beautify,
+            workers=args.workers,
         )
     except (CookieError, SlugError, DownloadError) as exc:
         print(str(exc), file=sys.stderr)
@@ -100,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_res = sub.add_parser("resolve")
     p_res.add_argument("--input", required=True)
+    p_res.add_argument("--pretty", action="store_true")
     p_res.set_defaults(func=_cmd_resolve)
 
     p_dl = sub.add_parser("download")
@@ -108,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     p_dl.add_argument("--input", required=True)
     p_dl.add_argument("--skip-existing", action="store_true")
     p_dl.add_argument("--no-beautify", action="store_true")
+    p_dl.add_argument("--workers", type=int, default=4)
     p_dl.set_defaults(func=_cmd_download)
 
     p_bf = sub.add_parser("beautify")

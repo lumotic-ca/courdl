@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "courdl-engine"
-version = "0.1.1"
+version = "0.2.0"
 description = "CourDL sidecar: dl_coursera + beautify with JSONL progress"
 readme = "README.md"
 requires-python = ">=3.11"

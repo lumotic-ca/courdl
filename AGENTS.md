@@ -32,6 +32,6 @@ scripts/                sidecar pack/link; batch-from-links.py for cert course l
 
 Keep download logic in `engine/`. Keep UI thin. When adding engine flags, mirror them in `DownloadOptions`, the form, and `download.rs`.
 
-Certificate slug in the GUI still maps to one `dl_coursera` run. Expanding a cert into all `/learn/` URLs is not implemented yet; document the per-course URL workaround until it is.
+Certificate and specialization URLs are expanded in `courdl_engine/catalog.py` before download. Do not pass a cert slug straight into one `dl_coursera` Spec crawl.
 
 Changelog: user-facing engine or GUI behavior goes in [CHANGELOG.md](CHANGELOG.md).

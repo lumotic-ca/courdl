@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cookies", type=Path, required=True)
     parser.add_argument("--no-skip-existing", action="store_true")
     parser.add_argument("--no-beautify", action="store_true")
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args(argv)
 
     skip = not args.no_skip_existing
@@ -127,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                     url,
                     skip_existing=skip,
                     no_beautify=args.no_beautify,
+                    workers=args.workers,
                 )
                 slug_cache[slug] = path
                 ok += 1

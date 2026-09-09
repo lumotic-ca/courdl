@@ -1,9 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-09-09
 
 ### Added
-- Docs for setup, sidecar layout, cookie normalization, and the cert-vs-course URL workaround (`docs/architecture.md`, README, `scripts/batch-from-links.py`).
+- Certificate and specialization URLs expand to every `/learn/` course via Coursera catalog APIs, then each course downloads as today.
+- `courdl-engine resolve --pretty --input` prints the course list.
+- Parallel file workers (default 4) inside `dl_coursera` (upstream hardcodes 1).
+- Docs for setup, sidecar layout, cookie normalization, and `scripts/batch-from-links.py`.
 
 ## [0.1.3] - 2026-09-05
 

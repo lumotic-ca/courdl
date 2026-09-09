@@ -85,10 +85,12 @@ Human logs go to stderr. The GUI treats JSON with `"courdl": true` as progress; 
 ### Download pipeline
 
 1. Normalize and validate cookies (`CAUTH` required).
-2. Parse slug from `/learn/`, `/specializations/`, or `/professional-certificates/` URL, or a bare slug.
-3. If `--skip-existing` and `outdir/<slug>` already has files, skip crawl.
-4. `dl_coursera --cookies … --outdir … <slug>`
-5. Beautify: `01@truncated-slug` to `01 - Title`, flatten untitled-lesson wrappers, write `README.md` (includes syllabus items that are not files).
+2. `resolve_product`: `/learn/` stays one course; `/specializations/` and `/professional-certificates/` (and bare slugs that have `courseIds`) expand via Coursera catalog APIs.
+3. Each course runs `dl_coursera` into `outdir/<slug>/` or `outdir/<Cert name>/<slug>/`.
+4. If `--skip-existing` and the course folder already has files, skip crawl.
+5. Beautify each course tree. Certificate folders get a README of course links.
+
+File downloads use 4 `dl_coursera` workers (upstream defaults to 1). Override with `--workers`.
 
 Keep `.cache/crawl.json`. Beautify cannot rename without it.
 
@@ -98,9 +100,9 @@ Files only: lecture MP4, `.srt` subtitles, reading HTML. Quizzes, labs, notebook
 
 ## Professional certificates vs course URLs
 
-`dl_coursera` can take a professional-certificate slug. In practice that often downloads **only the first course** in the cert. CourDL `resolve` does not expand a cert into its `/learn/` list.
+CourDL expands a live cert or specialization to every `/learn/` URL in `courseIds` order, then downloads each course the same way as a single course link. Pre-enroll products with no `courseIds` fail at resolve with a clear error.
 
-Until the engine walks the cert syllabus, download each course URL. A text manifest (certificate title, then one `/learn/` URL per line) can be fed to `scripts/batch-from-links.py` on Linux.
+Handmade bundles that are not one Coursera product still use `scripts/batch-from-links.py`.
 
 ## Packaging
 

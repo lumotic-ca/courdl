@@ -21,8 +21,9 @@ Cookies prove you are logged in. They do not dump quiz banks.
 
 ```bash
 courdl-engine check-cookies --file cookies.txt
-courdl-engine resolve --input 'https://www.coursera.org/learn/process-modeling'
-courdl-engine download --cookies cookies.txt --outdir ~/Documents/CourDL --input '<url-or-slug>'
+courdl-engine resolve --pretty --input 'https://www.coursera.org/professional-certificates/google-it-automation'
+courdl-engine download --cookies cookies.txt --outdir ~/Documents/CourDL \
+  --workers 4 --input 'https://www.coursera.org/professional-certificates/google-it-automation'
 courdl-engine beautify --path ~/Documents/CourDL/<slug> --cookies cookies.txt
 ```
 
@@ -46,9 +47,9 @@ CourDL rewrites the cookie file to classic Netscape before `MozillaCookieJar` / 
 
 ## Certificates and batch lists
 
-Passing a `/professional-certificates/…` URL often yields only the first course. Use each `/learn/` URL.
+`resolve` / `download` expand a published `/professional-certificates/…` or `/specializations/…` URL to each `/learn/` course (syllabus order). Example: Google IT Automation yields `python-crash-course` first, matching `?specialization=google-it-automation` links.
 
-Manifest format (certificate title on its own line, then course URLs):
+Use `scripts/batch-from-links.py` when the list is handmade (courses mixed from several products, extras Coursera does not put in `courseIds`).
 
 ```
 Microsoft Full Stack Dev Certificate
