@@ -23,7 +23,7 @@ Cookies prove you are logged in. They do not dump quiz banks.
 courdl-engine check-cookies --file cookies.txt
 courdl-engine resolve --pretty --input 'https://www.coursera.org/professional-certificates/google-it-automation'
 courdl-engine download --cookies cookies.txt --outdir ~/Documents/CourDL \
-  --workers 4 --input 'https://www.coursera.org/professional-certificates/google-it-automation'
+  --jobs 5 --workers 2 --input 'https://www.coursera.org/professional-certificates/google-it-automation'
 courdl-engine beautify --path ~/Documents/CourDL/<slug> --cookies cookies.txt
 ```
 
@@ -65,7 +65,9 @@ engine/.venv/bin/python ../scripts/batch-from-links.py \
   --jobs 4 --workers 3
 ```
 
-`--jobs` is concurrent courses (1-10, default 4). `--workers` is file threads per course (default 3). That keeps roughly a dozen Coursera connections. Touch `_batch.stop` in the outdir to halt after the current certificate. Resume is `_batch-state.json`.
+A certificate URL in the app starts about 5 course jobs and 2 file workers each. On HTTP 429 it drops to 3 course jobs, then climbs after a few successes. Catalog crawls are serialized so parallel courses do not race.
+
+`batch-from-links.py --jobs` is concurrent courses (1-10, default 4). `--workers` is file threads per course (default 3). Touch `_batch.stop` in the outdir to halt after the current certificate. Resume is `_batch-state.json`. A course is skipped only when it already has lecture files, not when `_batch-state.json` lists it.
 
 The script writes `cert-name/<course-slug>/`. Duplicate slugs across certs are copied from the first completed download instead of crawled again. `--skip-existing` is on by default.
 

@@ -25,7 +25,7 @@ if str(ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(ENGINE_DIR))
 
 from courdl_engine.cookies import CookieError, check_cookies_file  # noqa: E402
-from courdl_engine.download import DownloadError, download  # noqa: E402
+from courdl_engine.download import DownloadError, _course_ready as course_ready, download  # noqa: E402
 from courdl_engine.slug import SlugError, slug_from_input  # noqa: E402
 
 UNSAFE = "".join(chr(c) for c in range(32)) + '<>:"/\\|?*'
@@ -57,12 +57,6 @@ def parse_manifest(path: Path) -> list[tuple[str, list[str]]]:
     if urls:
         groups.append((current, urls))
     return [(name, u) for name, u in groups if u]
-
-
-def course_ready(dest: Path) -> bool:
-    if not dest.is_dir():
-        return False
-    return any(dest.iterdir())
 
 
 def copy_tree(src: Path, dest: Path) -> None:
@@ -207,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
             return "fail"
         dest = cert_dir / slug
         k = key_for(cert, slug)
-        if skip and (k in completed_courses or course_ready(dest)):
+        if skip and course_ready(dest):
             cache_put(slug, dest)
             with lock:
                 skipped += 1

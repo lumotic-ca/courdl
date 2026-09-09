@@ -87,10 +87,11 @@ Human logs go to stderr. The GUI treats JSON with `"courdl": true` as progress; 
 1. Normalize and validate cookies (`CAUTH` required).
 2. `resolve_product`: `/learn/` stays one course; `/specializations/` and `/professional-certificates/` (and bare slugs that have `courseIds`) expand via Coursera catalog APIs.
 3. Each course runs `dl_coursera` into `outdir/<slug>/` or `outdir/<Cert name>/<slug>/`.
-4. If `--skip-existing` and the course folder already has files, skip crawl.
-5. Beautify each course tree. Certificate folders get a README of course links.
+4. If `--skip-existing` and the course folder already has lecture files (not only `.cache`), skip crawl.
+5. Certificate and specialization products download several courses at once (adaptive 5 then 3 on 429). File workers stay at 2 in the app so total connections stay modest.
+6. Beautify each course tree. Certificate folders get a README of course links.
 
-File downloads use 4 `dl_coursera` workers (upstream defaults to 1). Override with `--workers`.
+Override with `--jobs`, `--jobs-min`, and `--workers`. Upstream `dl_coursera` defaults to 1 file worker.
 
 Keep `.cache/crawl.json`. Beautify cannot rename without it.
 

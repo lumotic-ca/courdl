@@ -159,7 +159,11 @@ pub async fn start_download(
         "--input".into(),
         options.input.trim().to_string(),
         "--workers".into(),
-        "4".into(),
+        "2".into(),
+        "--jobs".into(),
+        "5".into(),
+        "--jobs-min".into(),
+        "3".into(),
     ];
     if options.skip_existing {
         args.push("--skip-existing".into());

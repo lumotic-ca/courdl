@@ -57,6 +57,9 @@ def _cmd_download(args: argparse.Namespace) -> int:
             skip_existing=args.skip_existing,
             no_beautify=args.no_beautify,
             workers=args.workers,
+            jobs=args.jobs,
+            jobs_min=args.jobs_min,
+            adaptive=not args.no_adaptive,
         )
     except (CookieError, SlugError, DownloadError) as exc:
         print(str(exc), file=sys.stderr)
@@ -111,7 +114,29 @@ def main(argv: list[str] | None = None) -> int:
     p_dl.add_argument("--input", required=True)
     p_dl.add_argument("--skip-existing", action="store_true")
     p_dl.add_argument("--no-beautify", action="store_true")
-    p_dl.add_argument("--workers", type=int, default=4)
+    p_dl.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="File download threads inside each course (default 2).",
+    )
+    p_dl.add_argument(
+        "--jobs",
+        type=int,
+        default=5,
+        help="Max concurrent courses for a certificate (default 5).",
+    )
+    p_dl.add_argument(
+        "--jobs-min",
+        type=int,
+        default=3,
+        help="Concurrent courses after a rate limit (default 3).",
+    )
+    p_dl.add_argument(
+        "--no-adaptive",
+        action="store_true",
+        help="Keep --jobs concurrency instead of dropping on 429s.",
+    )
     p_dl.set_defaults(func=_cmd_download)
 
     p_bf = sub.add_parser("beautify")

@@ -33,7 +33,7 @@ The GUI is Windows-first. On this host, use the engine CLI or the batch script:
 cd engine && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/courdl-engine check-cookies --file ~/Documents/cookies.txt
 engine/.venv/bin/courdl-engine download --cookies ~/Documents/cookies.txt \
-  --outdir ~/Documents/CourDL --workers 4 \
+  --outdir ~/Documents/CourDL --jobs 5 --workers 2 \
   --input 'https://www.coursera.org/professional-certificates/google-it-automation'
 ```
 

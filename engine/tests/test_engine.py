@@ -156,3 +156,46 @@ def test_cookies_reject_placeholder(tmp_path: Path):
         assert False
     except CookieError:
         pass
+
+
+def test_looks_rate_limited():
+    from courdl_engine.adaptive import looks_rate_limited
+
+    assert looks_rate_limited(RuntimeError("HTTP 429 Too Many Requests"))
+    assert looks_rate_limited(RuntimeError("rate limit exceeded"))
+    assert not looks_rate_limited(RuntimeError("cookies expired"))
+
+
+def test_adaptive_gate_drops_then_climbs():
+    from courdl_engine.adaptive import AdaptiveGate
+
+    gate = AdaptiveGate(high=5, low=3, recover_after=2)
+    assert gate.enter() == 5
+    assert gate.leave(rate_limited=True) == 3
+    assert gate.enter() == 3
+    assert gate.leave(rate_limited=False) == 3
+    assert gate.enter() == 3
+    assert gate.leave(rate_limited=False) == 4
+
+
+def test_course_ready_ignores_cache_only(tmp_path: Path):
+    from courdl_engine.download import _course_ready
+
+    dest = tmp_path / "course"
+    cache = dest / ".cache"
+    cache.mkdir(parents=True)
+    (cache / "crawl.json").write_text("{}", encoding="utf-8")
+    assert not _course_ready(dest)
+    (dest / "lecture.mp4").write_bytes(b"x")
+    assert _course_ready(dest)
+
+
+def test_spec_probe_empty_elements_looks_like_course():
+    from courdl_engine.download import _SpecProbeResponse
+
+    class Inner:
+        def json(self):
+            return {"elements": []}
+
+    data = _SpecProbeResponse(Inner()).json()
+    assert "elements" not in data
