@@ -11,4 +11,6 @@ python3 -m venv .venv
 
 Subcommands: `version`, `check-cookies`, `resolve`, `download`, `beautify`.
 
-See [docs/engine.md](../docs/engine.md) and [docs/packaging.md](../docs/packaging.md).
+See [docs/architecture.md](../docs/architecture.md), [docs/engine.md](../docs/engine.md), and [docs/packaging.md](../docs/packaging.md).
+
+Certificate `/learn/` lists: `scripts/batch-from-links.py`.

@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Docs for setup, sidecar layout, cookie normalization, and the cert-vs-course URL workaround (`docs/architecture.md`, README, `scripts/batch-from-links.py`).
+
 ## [0.1.3] - 2026-09-05
 
 ### Fixed

@@ -1,8 +1,6 @@
 # CourDL engine notes
 
-Adapted from the Jupiter host toolchain. The sidecar in this repo is now the source of truth for
-`dl_coursera` + beautify. Jupiter still has a host CLI under `~/coursera` for Linux; see
-[host-cli.md](host-cli.md).
+The sidecar in this repo is the source of truth for `dl_coursera` + beautify. Jupiter still has a host CLI under `~/coursera` for Linux history; see [host-cli.md](host-cli.md).
 
 ## Tooling
 
@@ -15,8 +13,7 @@ Adapted from the Jupiter host toolchain. The sidecar in this repo is now the sou
 
 ## Paid account vs files on disk
 
-Enrollment lets you use the Coursera **web app**. `dl_coursera` only fetches files: lecture MP4,
-subtitles, supplement HTML. Quizzes and graded work are not files.
+Enrollment lets you use the Coursera **web app**. `dl_coursera` only fetches files: lecture MP4, subtitles, supplement HTML. Quizzes and graded work are not files.
 
 Cookies prove you are logged in. They do not dump quiz banks.
 
@@ -31,8 +28,43 @@ courdl-engine beautify --path ~/Documents/CourDL/<slug> --cookies cookies.txt
 
 Keep `.cache/crawl.json` if you want to re-beautify without crawling again.
 
+## Cookies
+
+CourDL rewrites the cookie file to classic Netscape before `MozillaCookieJar` / `dl_coursera` load it:
+
+- Cookie-Editor `#HttpOnly_` Netscape rows (CAUTH is HttpOnly)
+- JSON cookie arrays
+- UTF-16 exports
+
+`CAUTH` on `.coursera.org` is required. Cookies last on the order of two weeks.
+
 ## Beautify behavior
 
 - Flatten `untitled-lesson`
 - Match course folders when slugs are longer than 40 characters
 - List syllabus items that were not downloaded (quizzes, assignments) in each course README
+
+## Certificates and batch lists
+
+Passing a `/professional-certificates/…` URL often yields only the first course. Use each `/learn/` URL.
+
+Manifest format (certificate title on its own line, then course URLs):
+
+```
+Microsoft Full Stack Dev Certificate
+https://www.coursera.org/learn/full-stack-integration
+https://www.coursera.org/learn/security-and-authentication
+```
+
+```bash
+engine/.venv/bin/python ../scripts/batch-from-links.py \
+  --links ~/Documents/Course\ Links.txt \
+  --outdir ~/Documents/CourDL\ Courses \
+  --cookies ~/Documents/cookies.txt
+```
+
+The script writes `cert-name/<course-slug>/`. Duplicate slugs across certs are copied from the first completed download instead of crawled again. `--skip-existing` is on by default.
+
+## Progress protocol
+
+Stdout lines that are JSON objects with `"courdl": true` are GUI progress events. Other stdout/stderr is log text.
