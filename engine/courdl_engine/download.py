@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -13,7 +14,14 @@ from courdl_engine.adaptive import AdaptiveGate, looks_rate_limited
 from courdl_engine.beautify import beautify_tree, load_cookies, safe_name
 from courdl_engine.catalog import CatalogError, resolve_product
 from courdl_engine.cookies import check_cookies_file
-from courdl_engine.slug import slug_from_input
+from courdl_engine.paths import (
+    PATH_SCHEMA_VERSION,
+    sanitize_asset_name,
+    sanitize_dl_tasks,
+    url_basename_safe,
+    walk_sanitize_assets,
+    win_extended_path,
+)
 
 _CRAWL_LOCK = threading.Lock()
 _PROGRESS_LOCK = threading.Lock()
@@ -29,8 +37,39 @@ def _log(message: str) -> None:
         progress.log(message)
 
 
-class DownloadError(RuntimeError):
-    pass
+def _failed_tasks_file(dest: Path) -> Path:
+    return dest / ".cache" / "download.dl_tasks_failed.json"
+
+
+def _has_failed_tasks(dest: Path) -> bool:
+    path = _failed_tasks_file(dest)
+    if not path.is_file():
+        return False
+    try:
+        import json
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return bool(data)
+    except Exception:
+        return False
+
+
+def _path_schema_file(outdir: Path, slug: str) -> Path:
+    return Path(outdir) / slug / ".cache" / "courdl-path-schema"
+
+
+def _bust_stale_path_cache(outdir: Path, slug: str) -> None:
+    import dl_coursera_run
+
+    marker = _path_schema_file(outdir, slug)
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == PATH_SCHEMA_VERSION:
+        return
+    cache = Path(outdir) / slug / ".cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    Path(dl_coursera_run._file_pkl_crawl(outdir, slug)).unlink(missing_ok=True)
+    Path(dl_coursera_run._file_json_gather(outdir, slug)).unlink(missing_ok=True)
+    _failed_tasks_file(Path(outdir) / slug).unlink(missing_ok=True)
+    marker.write_text(PATH_SCHEMA_VERSION + "\n", encoding="utf-8")
 
 
 _PATCH_LOCK = threading.Lock()
@@ -76,6 +115,15 @@ def _ensure_patches() -> None:
             return
         orig_get = requests.Session.get
         orig_crawl = dl_coursera_run.crawl
+        orig_gather = dl_coursera_run.gather_dl_tasks
+        orig_dl = DownloaderBuiltin._dl
+        from dl_coursera.define import Asset as CourseraAsset
+        from dl_coursera.lib import misc as dl_misc
+
+        orig_asset_init = CourseraAsset.__init__
+
+        def asset_init(self, id_, url, name):
+            orig_asset_init(self, id_, url, sanitize_asset_name(str(name or "asset")))
 
         def get_patched(self, url, *args, **kwargs):
             resp = orig_get(self, url, *args, **kwargs)
@@ -85,25 +133,48 @@ def _ensure_patches() -> None:
 
         def crawl_locked(cookies_file, slug, outdir):
             dest = Path(outdir) / slug
+            _bust_stale_path_cache(Path(outdir), slug)
             pkl = Path(dl_coursera_run._file_pkl_crawl(outdir, slug))
             if pkl.exists() and not _course_ready(dest):
                 pkl.unlink(missing_ok=True)
                 Path(dl_coursera_run._file_json_gather(outdir, slug)).unlink(missing_ok=True)
             with _CRAWL_LOCK:
-                return orig_crawl(cookies_file, slug, outdir)
+                soc = orig_crawl(cookies_file, slug, outdir)
+            walk_sanitize_assets(soc)
+            import pickle
+
+            pkl_path = Path(dl_coursera_run._file_pkl_crawl(outdir, slug))
+            pkl_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(pkl_path, "wb") as ofs:
+                pickle.dump(soc, ofs)
+            _path_schema_file(Path(outdir), slug).write_text(
+                PATH_SCHEMA_VERSION + "\n", encoding="utf-8"
+            )
+            return soc
+
+        def gather_sanitized(outdir, soc):
+            walk_sanitize_assets(soc)
+            tasks = orig_gather(outdir, soc)
+            return sanitize_dl_tasks(tasks, outdir)
+
+        def builtin_dl(self, *, url, filename):
+            safe = win_extended_path(filename)
+            return orig_dl(self, url=url, filename=safe)
 
         def download_parallel(dl_tasks, slug, outdir):
+            import json
+            from tqdm import tqdm
+
+            dest = Path(outdir) / slug
             file_json = dl_coursera_run._file_json_download_dl_tasks_failed(outdir, slug)
             if Path(file_json).exists():
-                import json
-
                 with open(file_json, encoding="UTF-8") as ifs:
-                    dl_tasks = json.load(ifs)
+                    loaded = json.load(ifs)
+                if loaded:
+                    dl_tasks = loaded
+            dl_tasks = sanitize_dl_tasks(dl_tasks, dest)
             if len(dl_tasks) == 0:
                 return
-            from tqdm import tqdm
-            import json
-
             n = max(1, int(getattr(_tls, "file_workers", 2)))
             with TaskScheduler() as ts:
                 with tqdm(
@@ -122,8 +193,24 @@ def _ensure_patches() -> None:
                     ts.start(n_worker=n, hook_done=_hook_done, hook_retry=_hook_retry)
                     dl_tasks_failed = DownloaderBuiltin(dl_tasks=dl_tasks, ts=ts).download()
 
+            failed = sanitize_dl_tasks(dl_tasks_failed or [], dest)
             with open(file_json, "w", encoding="UTF-8") as ofs:
-                json.dump(dl_tasks_failed, ofs, indent=4)
+                json.dump(failed, ofs, indent=4)
+            if failed:
+                _tls.asset_failures = failed
+                _log(
+                    f"{len(failed)} supplemental file(s) failed under {dest}. "
+                    "Lecture videos can still be complete. See troubleshooting.md."
+                )
+                _emit(
+                    "warn",
+                    f"{len(failed)} extra file(s) failed (often Windows-unsafe names). Course lectures may still be OK.",
+                    slug=slug,
+                    failed=len(failed),
+                    level="warn",
+                )
+            else:
+                _tls.asset_failures = []
 
         orig_parse = argparse.ArgumentParser.parse_args
 
@@ -134,8 +221,12 @@ def _ensure_patches() -> None:
                     args = list(av[1:])
             return orig_parse(self, args, namespace)
 
+        CourseraAsset.__init__ = asset_init
+        dl_misc.url_basename = url_basename_safe
         requests.Session.get = get_patched
         dl_coursera_run.crawl = crawl_locked
+        dl_coursera_run.gather_dl_tasks = gather_sanitized
+        DownloaderBuiltin._dl = builtin_dl
         dl_coursera_run.download = download_parallel
         dl_coursera_run.get_latest_app_version = lambda: dl_coursera.app_version
         argparse.ArgumentParser.parse_args = parse_args_tls
@@ -183,15 +274,31 @@ def download_one(
     workers: int = 2,
 ) -> Path:
     dest = outdir / slug
-    if skip_existing and _course_ready(dest):
+    if skip_existing and _course_ready(dest) and not _has_failed_tasks(dest):
         _emit("skip", f"Already present, skipping download: {dest}")
         _log(f"Skip existing: {dest}")
         return dest
+    if skip_existing and _has_failed_tasks(dest):
+        _log(f"Retrying failed extra files for {slug} (videos may already exist)")
 
     _emit("download", "Starting dl_coursera", slug=slug)
     _log(f"Downloading {slug} into {outdir}")
+    _tls.asset_failures = []
     run_dl_coursera(cookies, outdir, slug, workers=workers)
     _emit("download", "dl_coursera finished", slug=slug)
+    leftover = getattr(_tls, "asset_failures", None) or (
+        json.loads(_failed_tasks_file(dest).read_text(encoding="utf-8"))
+        if _has_failed_tasks(dest)
+        else []
+    )
+    if leftover:
+        _emit(
+            "warn",
+            f"{len(leftover)} extra file(s) still failed. Lectures may be complete.",
+            slug=slug,
+            failed=len(leftover),
+            level="warn",
+        )
 
     if not dest.exists():
         raise DownloadError(f"Download finished but folder missing: {dest}")

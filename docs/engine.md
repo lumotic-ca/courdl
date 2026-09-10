@@ -71,6 +71,10 @@ A certificate URL in the app starts about 5 course jobs and 2 file workers each.
 
 The script writes `cert-name/<course-slug>/`. Duplicate slugs across certs are copied from the first completed download instead of crawled again. `--skip-existing` is on by default.
 
+## Windows asset names
+
+`dl_coursera` 1.0.1 can write `image.jpg?expiry=...&hmac=....jpg`. CourDL sanitizes those in `courdl_engine/paths.py` before download. See [troubleshooting.md](troubleshooting.md).
+
 ## Progress protocol
 
 Stdout lines that are JSON objects with `"courdl": true` are GUI progress events. Other stdout/stderr is log text.

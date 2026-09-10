@@ -2,7 +2,9 @@
 
 CourDL is a Windows-first desktop shell around a Python sidecar. The GUI never talks to Coursera. It copies cookies, picks a library folder, and runs `courdl-engine`. The engine runs `dl_coursera` 1.0.1, then our beautify pass.
 
-Identifier: `ca.lumotic.courdl`. Current app version lives in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`. Engine version lives in `engine/courdl_engine/__init__.py`.
+Identifier: `ca.lumotic.courdl`. Version lockstep: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `engine/pyproject.toml`, `engine/courdl_engine/__init__.py`. Do not duplicate the version in jupiter or zots-labs.
+
+Release: [release.md](release.md). Troubleshooting: [troubleshooting.md](troubleshooting.md). Decisions: [decisions.md](decisions.md).
 
 ## Layers
 
@@ -87,11 +89,12 @@ Human logs go to stderr. The GUI treats JSON with `"courdl": true` as progress; 
 1. Normalize and validate cookies (`CAUTH` required).
 2. `resolve_product`: `/learn/` stays one course; `/specializations/` and `/professional-certificates/` (and bare slugs that have `courseIds`) expand via Coursera catalog APIs.
 3. Each course runs `dl_coursera` into `outdir/<slug>/` or `outdir/<Cert name>/<slug>/`.
-4. If `--skip-existing` and the course folder already has lecture files (not only `.cache`), skip crawl.
+4. If `--skip-existing` and the course folder already has lecture files (not only `.cache`) **and** there is no non-empty `download.dl_tasks_failed.json`, skip crawl.
 5. Certificate and specialization products download several courses at once (adaptive 5 then 3 on 429). File workers stay at 2 in the app so total connections stay modest.
-6. Beautify each course tree. Certificate folders get a README of course links.
+6. Asset names pass through `courdl_engine/paths.py` before `open()` so Windows rejects (`?` in signed CDN names) do not abort lectures.
+7. Beautify each course tree. Certificate folders get a README of course links.
 
-Override with `--jobs`, `--jobs-min`, and `--workers`. Upstream `dl_coursera` defaults to 1 file worker.
+Override with `--jobs`, `--jobs-min`, and `--workers`. Upstream `dl_coursera` defaults to 1 file worker. Optional extra files that still fail emit a `warn` progress event; missing lecture media still fails the course.
 
 Keep `.cache/crawl.json`. Beautify cannot rename without it.
 
@@ -107,11 +110,11 @@ Handmade bundles that are not one Coursera product still use `scripts/batch-from
 
 ## Packaging
 
-See [packaging.md](packaging.md). Windows CI builds the sidecar with PyInstaller, names it `courdl-engine-x86_64-pc-windows-msvc.exe`, then `tauri build --bundles nsis`. Tag `v*` publishes the installer. The installer is unsigned; SmartScreen will warn.
+See [packaging.md](packaging.md) and [release.md](release.md). Tag `v*` publishes the unsigned NSIS installer.
 
 ## Jupiter and zots-labs
 
 - Host paths, Linux batch, leftover `~/coursera` CLI: [jupiter documentation/coursera-offline.md](https://github.com/lumotic-ca/jupiter/blob/main/documentation/coursera-offline.md)
-- Desktop product notes and development history: [zots-labs documentation/courdl.md](https://github.com/lumotic-ca/zots-labs/blob/main/documentation/courdl.md)
+- Lessons and lifecycle: [zots-labs documentation/courdl.md](https://github.com/lumotic-ca/zots-labs/blob/main/documentation/courdl.md)
 
 Beautify and cookie rules in this repo's engine are the source of truth going forward.
