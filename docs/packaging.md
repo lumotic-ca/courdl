@@ -2,15 +2,11 @@
 
 ## Sidecar name
 
-Tauri `externalBin` is `binaries/courdl-engine`. The file on disk must be `courdl-engine-<target-triple>[.exe]`.
+Tauri looks for `src-tauri/binaries/courdl-engine-<target-triple>[.exe]`.
 
 Windows CI copies:
 
-`src-tauri/binaries/courdl-engine-x86_64-pc-windows-msvc.exe`
-
-NSIS places that binary **next to** `CourDL.exe`, not under `resources/`. `paths.rs` probes the exe directory first. If you only search `resource_dir()`, Windows builds report "Missing: CourDL engine".
-
-This repo is a Cargo workspace. The NSIS installer is at **repo-root** `target/release/bundle/nsis/`, not `src-tauri/target/…`. The release workflow uploads both globs.
+`courdl-engine-x86_64-pc-windows-msvc.exe`
 
 ## Local Linux / macOS development
 
@@ -21,17 +17,14 @@ npm install
 npm run dev
 ```
 
-`link-dev-sidecar.sh` drops a stub binary Tauri can resolve. Real downloads need a built sidecar or `python -m courdl_engine`.
-
 ## Windows release
 
-GitHub Actions `.github/workflows/release-windows-nsis.yml` on `v*` tags:
+GitHub Actions workflow `.github/workflows/release-windows-nsis.yml`:
 
-1. Python 3.12, `pip install -e ".[pack]"`, PyInstaller `courdl-engine.spec`
-2. Copy sidecar into `src-tauri/binaries/` with the msvc triple name
-3. `npx tauri build --bundles nsis`
-4. Attach `CourDL_*_x64-setup.exe` to the GitHub Release
+1. Install Python 3.12 and PyInstaller
+2. Build the sidecar
+The NSIS `.exe` lands at `target/release/bundle/nsis/` when using the repo-root Cargo workspace (not `src-tauri/target`).
 
 The installer is **unsigned**. Windows SmartScreen will warn until an Authenticode cert is added.
 
-WebView2 is required on Windows 10. Windows 11 usually already has it. Install mode is current-user NSIS.
+WebView2 is required on Windows 10. Windows 11 usually already has it.

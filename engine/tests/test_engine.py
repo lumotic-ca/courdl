@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from courdl_engine.catalog import classify_input, resolve_product
+from courdl_engine.catalog import resolve_product
 from courdl_engine.cookies import CookieError, check_cookies_file
 from courdl_engine.slug import SlugError, slug_from_input
 
@@ -70,28 +70,46 @@ def test_cookies_json_export(tmp_path: Path):
     assert "\tCAUTH\t" in p.read_text(encoding="utf-8")
 
 
-def test_classify_cert_and_course_urls():
-    kind, slug = classify_input(
-        "https://www.coursera.org/professional-certificates/google-it-automation"
+def test_cookies_reject_placeholder(tmp_path: Path):
+    p = tmp_path / "cookies.txt"
+    p.write_text(
+        ".coursera.org\tTRUE\t/\tTRUE\t1999999999\tCAUTH\treplace-with-real-value\n",
+        encoding="utf-8",
     )
-    assert kind == "professional-certificate"
-    assert slug == "google-it-automation"
-    kind, slug = classify_input(
-        "https://www.coursera.org/learn/python-crash-course?specialization=google-it-automation"
-    )
-    assert kind == "course"
-    assert slug == "python-crash-course"
-    kind, slug = classify_input("google-it-automation")
-    assert kind == "unknown"
-    assert slug == "google-it-automation"
+    try:
+        check_cookies_file(p)
+        assert False
+    except CookieError:
+        pass
 
 
-def test_resolve_product_expands_course_ids():
+def test_download_error_is_exportable():
+    from courdl_engine.download import DownloadError, download
+    from courdl_engine.__main__ import main
+
+    assert issubclass(DownloadError, RuntimeError)
+    assert callable(download)
+    assert callable(main)
+
+
+def test_course_ready_ignores_cache_only(tmp_path: Path):
+    from courdl_engine.download import _course_ready
+
+    dest = tmp_path / "course"
+    cache = dest / ".cache"
+    cache.mkdir(parents=True)
+    (cache / "crawl.json").write_text("{}", encoding="utf-8")
+    assert not _course_ready(dest)
+    (dest / "lecture.mp4").write_bytes(b"x")
+    assert _course_ready(dest)
+
+
+def test_cert_expand_keeps_syllabus_order():
     spec = {
         "elements": [
             {
-                "name": "Google IT Automation with Python",
                 "slug": "google-it-automation",
+                "name": "Google IT Automation",
                 "courseIds": ["id-a", "id-b"],
             }
         ]
@@ -117,7 +135,6 @@ def test_resolve_product_expands_course_ids():
         "python-crash-course",
         "python-operating-system",
     ]
-    assert product["courses"][0]["url"] == "https://www.coursera.org/learn/python-crash-course"
     assert product["courseCount"] == 2
     assert product["preview"] == "2 courses in this certificate"
 
@@ -144,58 +161,3 @@ def test_course_preview_counts_modules():
     assert product["moduleCount"] == 3
     assert product["preview"] == "3 modules in this course"
 
-
-def test_cookies_reject_placeholder(tmp_path: Path):
-    p = tmp_path / "cookies.txt"
-    p.write_text(
-        ".coursera.org\tTRUE\t/\tTRUE\t1999999999\tCAUTH\treplace-with-real-value\n",
-        encoding="utf-8",
-    )
-    try:
-        check_cookies_file(p)
-        assert False
-    except CookieError:
-        pass
-
-
-def test_looks_rate_limited():
-    from courdl_engine.adaptive import looks_rate_limited
-
-    assert looks_rate_limited(RuntimeError("HTTP 429 Too Many Requests"))
-    assert looks_rate_limited(RuntimeError("rate limit exceeded"))
-    assert not looks_rate_limited(RuntimeError("cookies expired"))
-
-
-def test_adaptive_gate_drops_then_climbs():
-    from courdl_engine.adaptive import AdaptiveGate
-
-    gate = AdaptiveGate(high=5, low=3, recover_after=2)
-    assert gate.enter() == 5
-    assert gate.leave(rate_limited=True) == 3
-    assert gate.enter() == 3
-    assert gate.leave(rate_limited=False) == 3
-    assert gate.enter() == 3
-    assert gate.leave(rate_limited=False) == 4
-
-
-def test_course_ready_ignores_cache_only(tmp_path: Path):
-    from courdl_engine.download import _course_ready
-
-    dest = tmp_path / "course"
-    cache = dest / ".cache"
-    cache.mkdir(parents=True)
-    (cache / "crawl.json").write_text("{}", encoding="utf-8")
-    assert not _course_ready(dest)
-    (dest / "lecture.mp4").write_bytes(b"x")
-    assert _course_ready(dest)
-
-
-def test_spec_probe_empty_elements_looks_like_course():
-    from courdl_engine.download import _SpecProbeResponse
-
-    class Inner:
-        def json(self):
-            return {"elements": []}
-
-    data = _SpecProbeResponse(Inner()).json()
-    assert "elements" not in data

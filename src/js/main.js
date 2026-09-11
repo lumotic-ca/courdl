@@ -26,6 +26,7 @@ const runBeautify = document.getElementById("run-beautify");
 const form = document.getElementById("download-form");
 
 let running = false;
+let cancelled = false;
 let previewTimer = 0;
 let previewSeq = 0;
 
@@ -172,6 +173,7 @@ form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   jobStatus.textContent = "";
   logEl.textContent = "";
+  cancelled = false;
   setProgress(progressEl, { phase: "start", message: "Starting download" });
   try {
     setBusy(true);
@@ -190,9 +192,17 @@ form.addEventListener("submit", async (ev) => {
 
 cancelBtn.addEventListener("click", async () => {
   try {
-    await invoke("cancel_download");
-    appendLog(logEl, "Cancel requested.\n");
+    const result = await invoke("cancel_download");
+    cancelled = true;
+    setBusy(false);
+    const removed = result && result.removed;
+    appendLog(logEl, removed ? `Cancel: stopped the engine and deleted ${removed}\n` : "Cancel: stopped the engine.\n");
+    jobStatus.textContent = removed
+      ? "Cancelled. In-progress course folder removed."
+      : "Cancelled.";
+    await refreshLibrary(libraryList).catch(() => {});
   } catch (e) {
+    setBusy(false);
     jobStatus.textContent = e.message || String(e);
   }
 });
@@ -214,6 +224,11 @@ listen("download-started", () => {
 
 listen("download-finished", (ev) => {
   setBusy(false);
+  if (cancelled) {
+    cancelled = false;
+    refreshLibrary(libraryList).catch(() => {});
+    return;
+  }
   const code = ev.payload && ev.payload.code;
   if (code === 0) {
     jobStatus.textContent = "Finished.";
@@ -225,9 +240,9 @@ listen("download-finished", (ev) => {
   loadAll().catch(() => {});
 });
 
-onReady();
-
 urlInput.addEventListener("input", scheduleUrlPreview);
 urlInput.addEventListener("paste", () => {
-  window.setTimeout(scheduleUrlPreview, 0);
+  window.setTimeout(() => scheduleUrlPreview(), 0);
 });
+
+onReady();

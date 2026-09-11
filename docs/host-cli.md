@@ -6,5 +6,3 @@ the host at `~/coursera/download.sh`. A snapshot is [host-cli.sh](host-cli.sh).
 Do not use that script as the Windows engine. CourDL calls `python -m courdl_engine` (or the
 frozen sidecar). The host script's Visio-specific delete of `process-modeling` is **not** carried
 into CourDL.
-
-Linux batches of `/learn/` URLs: `scripts/batch-from-links.py`. See [engine.md](engine.md).

@@ -1,17 +1,20 @@
 # Changelog
 
-## [0.2.0] - 2026-09-09
+## [0.1.4] - 2026-09-11
 
 ### Added
-- Certificate and specialization URLs expand to every `/learn/` course via Coursera catalog APIs, then each course downloads as today.
-- URL preview: `{n} courses in this certificate` or `{n} modules in this course` after paste.
-- `courdl-engine resolve --pretty --input` prints the course list and preview line.
-- Parallel file workers (default 2 in the app) inside `dl_coursera`.
-- Certificate downloads run up to 5 courses at once, drop to 3 after a 429, then climb back. `--jobs`, `--jobs-min`, `--no-adaptive`.
-- `scripts/batch-from-links.py` is resumable (`_batch-state.json`), stoppable (`_batch.stop`), and runs up to 10 course jobs at once.
-- Empty `.cache` folders no longer count as a finished course. Skip-existing requires mp4, srt, or html outside `.cache`.
-- Course crawls that Coursera reports as empty specializations are treated as courses.
-- Cross-links: Jupiter host runbook and zots-labs desktop notes.
+- Paste preview: `{n} courses in this certificate` or `{n} modules in this course`.
+- Certificate and specialization URLs expand to each `/learn/` course, then download **one course at a time**.
+- Cancel kills the engine process tree (Windows `taskkill /T`) and deletes only the course folder that was in progress. Finished sibling courses in a certificate stay on disk.
+- Windows-safe asset names before `open()` (signed `?key=` / `?expiry=` URLs). Extra files that still fail warn; missing lectures still fail the course.
+
+### Changed
+- Skip-existing requires lecture files (`mp4`, `srt`, or `html`) outside `.cache`.
+- tqdm progress bars are disabled in the sidecar so the GUI log is not flooded with ANSI redraws.
+
+### Removed from the 0.2.x line
+- GitHub Releases **v0.2.0** and **v0.2.1** were withdrawn. They are not a supported upgrade path.
+- Concurrent certificate jobs (5 then 3) are gone. That was the overlapping crawl/download log and the cancel that could not keep up.
 
 ## [0.1.3] - 2026-09-05
 

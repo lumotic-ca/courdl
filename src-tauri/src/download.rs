@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Deserialize;
@@ -13,6 +14,8 @@ use crate::settings::{self, Settings};
 #[derive(Default)]
 pub struct JobState {
     pub child: Mutex<Option<CommandChild>>,
+    pub library: Mutex<Option<PathBuf>>,
+    pub active_dest: Mutex<Option<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -29,6 +32,40 @@ fn sidecar_command(
     app.shell()
         .sidecar("courdl-engine")
         .map_err(|e| format!("Engine sidecar not found: {e}"))
+}
+
+fn is_inside_library(library: &Path, dest: &Path) -> bool {
+    let lib = library.canonicalize().unwrap_or_else(|_| library.to_path_buf());
+    let target = if dest.exists() {
+        dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf())
+    } else {
+        dest.to_path_buf()
+    };
+    target.starts_with(&lib) && target != lib
+}
+
+fn delete_in_progress(library: Option<&PathBuf>, dest: Option<&PathBuf>) -> Option<String> {
+    let library = library?;
+    let dest = dest?;
+    if !is_inside_library(library, dest) {
+        return None;
+    }
+    if dest.exists() {
+        let _ = std::fs::remove_dir_all(dest);
+        return Some(dest.display().to_string());
+    }
+    None
+}
+
+fn kill_sidecar(child: CommandChild) {
+    #[cfg(windows)]
+    {
+        let pid = child.pid();
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .status();
+    }
+    let _ = child.kill();
 }
 
 #[tauri::command]
@@ -149,6 +186,8 @@ pub async fn start_download(
     settings::save(&app, &cfg)?;
     let outdir = cfg.library_path.clone();
     ensure_dir(std::path::Path::new(&outdir))?;
+    *job.library.lock().map_err(|e| e.to_string())? = Some(PathBuf::from(&outdir));
+    *job.active_dest.lock().map_err(|e| e.to_string())? = None;
 
     let mut args = vec![
         "download".into(),
@@ -158,12 +197,6 @@ pub async fn start_download(
         outdir,
         "--input".into(),
         options.input.trim().to_string(),
-        "--workers".into(),
-        "2".into(),
-        "--jobs".into(),
-        "5".into(),
-        "--jobs-min".into(),
-        "3".into(),
     ];
     if options.skip_existing {
         args.push("--skip-existing".into());
@@ -190,6 +223,15 @@ pub async fn start_download(
                         }
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(piece.trim()) {
                             if json.get("courdl").and_then(|v| v.as_bool()) == Some(true) {
+                                if json.get("phase").and_then(|v| v.as_str()) == Some("dest") {
+                                    if let Some(path) = json.get("path").and_then(|v| v.as_str()) {
+                                        if let Ok(mut dest) =
+                                            app_clone.state::<JobState>().active_dest.lock()
+                                        {
+                                            *dest = Some(PathBuf::from(path));
+                                        }
+                                    }
+                                }
                                 let _ = app_clone.emit("download-progress", json);
                                 continue;
                             }
@@ -222,18 +264,31 @@ pub async fn start_download(
 }
 
 #[tauri::command]
-pub fn cancel_download(job: tauri::State<JobState>) -> Envelope<bool> {
-    match job.child.lock() {
-        Ok(mut guard) => {
-            if let Some(child) = guard.take() {
-                let _ = child.kill();
-                ok(true)
-            } else {
-                crate::error::err::<bool>("idle", "No download is running.")
-            }
-        }
-        Err(e) => crate::error::err::<bool>("lock", e.to_string()),
+pub fn cancel_download(app: AppHandle, job: tauri::State<JobState>) -> Envelope<serde_json::Value> {
+    let child = match job.child.lock() {
+        Ok(mut guard) => guard.take(),
+        Err(e) => return crate::error::err_json("lock", e.to_string()),
+    };
+    if child.is_none() {
+        return crate::error::err_json("idle", "No download is running.");
     }
+    if let Some(child) = child {
+        kill_sidecar(child);
+    }
+    let dest = job.active_dest.lock().ok().and_then(|g| g.clone());
+    let library = job.library.lock().ok().and_then(|g| g.clone());
+    let removed = delete_in_progress(library.as_ref(), dest.as_ref());
+    if let Ok(mut dest_guard) = job.active_dest.lock() {
+        *dest_guard = None;
+    }
+    let _ = app.emit(
+        "download-cancelled",
+        serde_json::json!({ "removed": removed }),
+    );
+    crate::error::ok_json(serde_json::json!({
+        "cancelled": true,
+        "removed": removed,
+    }))
 }
 
 #[tauri::command]
