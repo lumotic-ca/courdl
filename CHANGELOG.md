@@ -1,13 +1,5 @@
 # Changelog
 
-## [0.2.1] - 2026-09-10
-
-### Fixed
-- Windows `OSError: [Errno 22]` when Coursera puts `?expiry=` / `&hmac=` in image asset names. Names are sanitized before download. Failed extras retry even if videos already exist. Optional files warn; missing lectures still fail the course.
-
-### Added
-- Engine pytest CI on Ubuntu and Windows. Docs: release, troubleshooting, decisions.
-
 ## [0.2.0] - 2026-09-09
 
 ### Added

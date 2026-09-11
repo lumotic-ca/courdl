@@ -23,10 +23,6 @@ npm run dev
 
 `link-dev-sidecar.sh` drops a stub binary Tauri can resolve. Real downloads need a built sidecar or `python -m courdl_engine`.
 
-See [release.md](release.md) for tag policy. Do not tag unless the owner asked.
-
-Pytest: `.github/workflows/ci.yml` on `main` (Ubuntu + Windows).
-
 ## Windows release
 
 GitHub Actions `.github/workflows/release-windows-nsis.yml` on `v*` tags:
