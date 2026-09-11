@@ -22,7 +22,6 @@ from courdl_engine.paths import (
     walk_sanitize_assets,
     win_extended_path,
 )
-from courdl_engine.slug import slug_from_input
 
 _CRAWL_LOCK = threading.Lock()
 _PROGRESS_LOCK = threading.Lock()
@@ -38,10 +37,6 @@ def _log(message: str) -> None:
         progress.log(message)
 
 
-class DownloadError(RuntimeError):
-    pass
-
-
 def _failed_tasks_file(dest: Path) -> Path:
     return dest / ".cache" / "download.dl_tasks_failed.json"
 
@@ -51,6 +46,8 @@ def _has_failed_tasks(dest: Path) -> bool:
     if not path.is_file():
         return False
     try:
+        import json
+
         data = json.loads(path.read_text(encoding="utf-8"))
         return bool(data)
     except Exception:

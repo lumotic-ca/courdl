@@ -4,7 +4,6 @@
 
 ### Fixed
 - Windows `OSError: [Errno 22]` when Coursera puts `?expiry=` / `&hmac=` in image asset names. Names are sanitized before download. Failed extras retry even if videos already exist. Optional files warn; missing lectures still fail the course.
-- Restore `DownloadError` and `slug_from_input` on the engine download module. The first 0.2.1 sidecar dropped both while adding path sanitizers, so Status and Download showed `ImportError: cannot import name 'DownloadError'`. Reinstall the rebuilt 0.2.1 installer.
 
 ### Added
 - Engine pytest CI on Ubuntu and Windows. Docs: release, troubleshooting, decisions.

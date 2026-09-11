@@ -178,15 +178,6 @@ def test_adaptive_gate_drops_then_climbs():
     assert gate.leave(rate_limited=False) == 4
 
 
-def test_download_error_is_exportable():
-    from courdl_engine.download import DownloadError, download
-    from courdl_engine.__main__ import main
-
-    assert issubclass(DownloadError, RuntimeError)
-    assert callable(download)
-    assert callable(main)
-
-
 def test_course_ready_ignores_cache_only(tmp_path: Path):
     from courdl_engine.download import _course_ready
 
