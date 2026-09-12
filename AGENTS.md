@@ -31,6 +31,7 @@ Keep these identical: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Ca
 | Command | Purpose |
 | --- | --- |
 | `engine/.venv/bin/pytest` | Engine unit tests |
+| `bash scripts/smoke.sh` | Engine pytest plus Rust `cargo test` / `cargo check` |
 | `bash scripts/link-dev-sidecar.sh` | Linux/macOS stub sidecar for `tauri dev` |
 | `npm run dev` | Tauri debug |
 | `npm run build` | NSIS installer (Windows) |
@@ -40,6 +41,8 @@ Keep download logic in `engine/`. Keep UI thin.
 Certificate URLs expand in `courdl_engine/catalog.py`. Do not pass a cert slug into one `dl_coursera` Spec crawl.
 
 Windows-unsafe asset names are sanitized in `courdl_engine/paths.py` before `open()`. Do not edit `dl_coursera` site-packages.
+
+File dialog commands (`pick_cookies_file`, `pick_library_dir`) must stay `async fn` and use `blocking_pick_*`. A sync command freezes the webview on macOS.
 
 Cancel must kill the sidecar process tree and delete only the in-progress course folder under the library path. Each GUI download must append a `courdl-logs/courdl-*.txt` session file in the library. Do not put cookie values in that file.
 

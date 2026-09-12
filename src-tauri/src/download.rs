@@ -115,13 +115,23 @@ fn with_preview_fallback(mut value: serde_json::Value) -> serde_json::Value {
     value
 }
 
+fn canonical_or_join(path: &Path) -> PathBuf {
+    if let Ok(c) = path.canonicalize() {
+        return c;
+    }
+    if let Some(parent) = path.parent() {
+        if let Ok(cparent) = parent.canonicalize() {
+            if let Some(name) = path.file_name() {
+                return cparent.join(name);
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
 fn is_inside_library(library: &Path, dest: &Path) -> bool {
-    let lib = library.canonicalize().unwrap_or_else(|_| library.to_path_buf());
-    let target = if dest.exists() {
-        dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf())
-    } else {
-        dest.to_path_buf()
-    };
+    let lib = canonical_or_join(library);
+    let target = canonical_or_join(dest);
     target.starts_with(&lib) && target != lib
 }
 
@@ -186,11 +196,20 @@ fn append_session_log(path: Option<&PathBuf>, line: &str) {
 }
 
 fn kill_sidecar(child: CommandChild) {
+    let pid = child.pid();
     #[cfg(windows)]
     {
-        let pid = child.pid();
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .status();
+    }
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-TERM", "-P", &pid.to_string()])
+            .status();
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
             .status();
     }
     let _ = child.kill();
@@ -468,5 +487,67 @@ pub fn save_settings(app: AppHandle, data: Settings) -> Envelope<Settings> {
     match settings::save(&app, &data) {
         Ok(()) => ok(data),
         Err(e) => crate::error::err::<Settings>("io", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_inside_library, parse_sidecar_json, safe_stamp, with_preview_fallback};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn parse_json_object() {
+        let v = parse_sidecar_json(br#"{"ok":true,"preview":"3 courses"}"#, b"").unwrap();
+        assert_eq!(v["preview"], "3 courses");
+    }
+
+    #[test]
+    fn parse_json_after_noise() {
+        let stdout = b"loading plugins\n{\"kind\":\"specialization\",\"courseCount\":3}\n";
+        let v = parse_sidecar_json(stdout, b"").unwrap();
+        assert_eq!(v["courseCount"], 3);
+    }
+
+    #[test]
+    fn parse_uses_stderr_when_not_json() {
+        let err = parse_sidecar_json(b"not json", b"engine boom").unwrap_err();
+        assert_eq!(err, "engine boom");
+    }
+
+    #[test]
+    fn preview_fallback_for_certificate() {
+        let v = with_preview_fallback(serde_json::json!({
+            "kind": "certificate",
+            "courseCount": 4
+        }));
+        assert_eq!(v["preview"], "4 courses in this certificate");
+    }
+
+    #[test]
+    fn preview_keeps_existing() {
+        let v = with_preview_fallback(serde_json::json!({
+            "kind": "certificate",
+            "courseCount": 4,
+            "preview": "already set"
+        }));
+        assert_eq!(v["preview"], "already set");
+    }
+
+    #[test]
+    fn stamp_strips_unsafe_chars() {
+        assert_eq!(safe_stamp(Some("2026-09-12 13:00")), "2026-09-121300");
+        assert!(!safe_stamp(None).is_empty());
+    }
+
+    #[test]
+    fn dest_must_be_inside_library() {
+        let root = std::env::temp_dir().join(format!("courdl-lib-{}", std::process::id()));
+        let course = root.join("course-a");
+        fs::create_dir_all(&course).unwrap();
+        assert!(is_inside_library(&root, &course));
+        assert!(!is_inside_library(&root, &root));
+        assert!(!is_inside_library(&root, &PathBuf::from("/tmp")));
+        let _ = fs::remove_dir_all(&root);
     }
 }

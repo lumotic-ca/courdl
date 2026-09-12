@@ -24,10 +24,7 @@ pub fn evaluate(app: &AppHandle) -> PrerequisiteReport {
     } else if sidecar {
         notes.push("Engine sidecar is registered with the app shell.".into());
     } else {
-        notes.push(
-            "CourDL engine was not found next to the app. Reinstall from the GitHub Release .exe."
-                .into(),
-        );
+        notes.push(engine_missing_note());
     }
     let cookies = cookies_exist(app);
     if !cookies {
@@ -52,6 +49,19 @@ pub fn evaluate(app: &AppHandle) -> PrerequisiteReport {
 
 pub fn ready(report: &PrerequisiteReport) -> bool {
     report.sidecar && report.cookies && report.webview2
+}
+
+fn engine_missing_note() -> String {
+    if cfg!(target_os = "macos") {
+        "CourDL engine was not found next to the app. Reinstall the DMG from the GitHub Release, then run: xattr -cr /Applications/CourDL.app"
+            .into()
+    } else if cfg!(windows) {
+        "CourDL engine was not found next to the app. Reinstall from the GitHub Release .exe."
+            .into()
+    } else {
+        "CourDL engine was not found next to the app. Reinstall CourDL."
+            .into()
+    }
 }
 
 fn webview2_ok() -> bool {

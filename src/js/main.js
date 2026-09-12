@@ -7,6 +7,7 @@ import {
   renderPrereqs,
   wizardNeeded,
   importCookiesFromPicker,
+  withFilePicker,
 } from "./wizard.js";
 
 const logEl = document.getElementById("log");
@@ -116,25 +117,38 @@ async function onReady() {
 }
 
 document.getElementById("wizard-import").addEventListener("click", async () => {
+  const wizardLog = document.getElementById("wizard-log");
   try {
-    await importCookiesFromPicker();
+    const picked = await withFilePicker(
+      wizardLog,
+      "Choose a cookies.txt file in the dialog. Cancel is safe.",
+      () => importCookiesFromPicker(),
+    );
+    if (!picked) return;
     const { report, settings } = await loadAll();
+    wizardLog.textContent = "Cookies imported.";
     if (!wizardNeeded(report, settings)) showWizard(false);
   } catch (e) {
-    document.getElementById("wizard-log").textContent = e.message || String(e);
+    wizardLog.textContent = e.message || String(e);
   }
 });
 
 document.getElementById("wizard-folder").addEventListener("click", async () => {
+  const wizardLog = document.getElementById("wizard-log");
   try {
-    const dir = await invoke("pick_library_dir");
+    const dir = await withFilePicker(
+      wizardLog,
+      "Choose a library folder in the dialog. Cancel is safe.",
+      () => invoke("pick_library_dir"),
+    );
     if (!dir) return;
     const settings = await invoke("get_settings");
     settings.libraryPath = dir;
     await invoke("save_settings", { data: settings });
     await loadAll();
+    wizardLog.textContent = "Library folder updated.";
   } catch (e) {
-    document.getElementById("wizard-log").textContent = e.message || String(e);
+    wizardLog.textContent = e.message || String(e);
   }
 });
 
@@ -160,7 +174,12 @@ document.getElementById("open-wizard").addEventListener("click", () => showWizar
 
 document.getElementById("import-cookies").addEventListener("click", async () => {
   try {
-    await importCookiesFromPicker();
+    const picked = await withFilePicker(
+      jobStatus,
+      "Choose a cookies.txt file in the dialog. Cancel is safe.",
+      () => importCookiesFromPicker(),
+    );
+    if (!picked) return;
     await loadAll();
     jobStatus.textContent = "Cookies imported.";
   } catch (e) {
@@ -170,12 +189,17 @@ document.getElementById("import-cookies").addEventListener("click", async () => 
 
 document.getElementById("change-folder").addEventListener("click", async () => {
   try {
-    const dir = await invoke("pick_library_dir");
+    const dir = await withFilePicker(
+      jobStatus,
+      "Choose a library folder in the dialog. Cancel is safe.",
+      () => invoke("pick_library_dir"),
+    );
     if (!dir) return;
     const settings = await invoke("get_settings");
     settings.libraryPath = dir;
     await invoke("save_settings", { data: settings });
     await loadAll();
+    jobStatus.textContent = "Library folder updated.";
   } catch (e) {
     jobStatus.textContent = e.message || String(e);
   }

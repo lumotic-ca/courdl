@@ -77,7 +77,12 @@ jobs:
             find . -name 'CourDL.app' -type d | head
             exit 1
           fi
-          codesign --force --deep --sign - "$APP"
+          codesign --force --deep --sign - --entitlements src-tauri/entitlements.macos.plist "$APP"
+          find "$APP/Contents" -type f \( -name 'courdl-engine' -o -name 'courdl-engine-*' \) -print | while read -r engine; do
+            chmod +x "$engine"
+            codesign --force --sign - --entitlements src-tauri/entitlements.macos.plist "$engine"
+          done
+          codesign --force --sign - --entitlements src-tauri/entitlements.macos.plist "$APP"
           codesign --verify --verbose=2 "$APP" || true
           STAGE="$(mktemp -d)"
           cp -R "$APP" "$STAGE/CourDL.app"

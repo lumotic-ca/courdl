@@ -81,9 +81,18 @@ pub fn open_library_folder(app: AppHandle) -> Envelope<String> {
 }
 
 #[tauri::command]
-pub fn pick_library_dir(app: AppHandle) -> Envelope<Option<String>> {
+pub async fn pick_library_dir(app: AppHandle) -> Envelope<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
-    let picked = app.dialog().file().blocking_pick_folder();
-    let path = picked.and_then(|p| p.into_path().ok().map(|p| p.display().to_string()));
-    ok(path)
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Choose CourDL library folder")
+        .blocking_pick_folder();
+    let Some(folder) = picked else {
+        return ok(None);
+    };
+    match folder.into_path() {
+        Ok(path) => ok(Some(path.display().to_string())),
+        Err(e) => crate::error::err("dialog", format!("Could not read the selected folder: {e}")),
+    }
 }

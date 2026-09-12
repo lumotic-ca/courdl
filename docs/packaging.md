@@ -30,7 +30,11 @@ xattr -cr /Applications/CourDL.app
 open /Applications/CourDL.app
 ```
 
-Example: attach a 0.1.3 Apple Silicon DMG to the existing `v0.1.3` release by dispatching the workflow with `git_ref=v0.1.3` and `release_tag=v0.1.3`.
+File pickers (import cookies, change library folder) must run as **async** Tauri commands. A sync `blocking_pick_*` call deadlocks the macOS open panel and the app must be force-quit. See [smoke.md](smoke.md).
+
+The PyInstaller sidecar is windowed on macOS (`console=False`) so Finder does not attach a Terminal. CI re-signs the sidecar with `src-tauri/entitlements.macos.plist`.
+
+Example: attach a 0.1.3 Apple Silicon DMG to the existing `v0.1.3` release by dispatching the workflow with `git_ref=v0.1.3` and `release_tag=v0.1.3`. That older DMG still has the file-picker freeze.
 
 ## Windows release
 

@@ -25,6 +25,12 @@ Private GitHub Releases (`v*` tags or workflow_dispatch). The `.exe` is **unsign
 
 Requires [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) on Windows 10.
 
+## macOS
+
+Apple Silicon DMG from GitHub Releases (manual workflow). The build is unsigned. If macOS says the app is damaged, run `xattr -cr /Applications/CourDL.app` after copying it to Applications.
+
+Intel Macs need a different build. 0.1.6 fixes the file-picker freeze from the 0.1.3 Mac DMG.
+
 ## Develop
 
 See [docs/packaging.md](docs/packaging.md) and [AGENTS.md](AGENTS.md).

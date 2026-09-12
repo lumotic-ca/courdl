@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6] - 2026-09-12
+
+### Fixed
+- macOS file pickers (import cookies, change library folder) no longer freeze the app. The native dialog must run from an async Tauri command; the Windows-oriented sync path deadlocked NSOpenPanel.
+- Cancel on macOS/Linux now stops child engine processes, not only the sidecar parent.
+- Cookie import rejects files that do not contain `CAUTH`, with a readable error instead of a silent copy.
+- Missing-engine status on macOS points at the DMG and `xattr -cr`, not the Windows `.exe`.
+- Sidecar lookup also checks `Contents/Resources` inside a macOS `.app` bundle.
+
+### Changed
+- macOS sidecar is built windowed (no Terminal). File pickers show a status line while the dialog is open; cancel is not treated as an error.
+
 ## [0.1.5] - 2026-09-12
 
 ### Fixed

@@ -40,3 +40,30 @@ export async function importCookiesFromPicker() {
   await invoke("import_cookies", { source: picked });
   return picked;
 }
+
+const PICKER_BUTTON_IDS = [
+  "wizard-import",
+  "wizard-folder",
+  "import-cookies",
+  "change-folder",
+];
+
+let pickerOpen = false;
+
+export async function withFilePicker(statusEl, message, fn) {
+  if (pickerOpen) return undefined;
+  pickerOpen = true;
+  const buttons = PICKER_BUTTON_IDS.map((id) => document.getElementById(id)).filter(Boolean);
+  for (const button of buttons) button.disabled = true;
+  const previous = statusEl ? statusEl.textContent : "";
+  if (statusEl) statusEl.textContent = message;
+  try {
+    return await fn();
+  } finally {
+    pickerOpen = false;
+    for (const button of buttons) button.disabled = false;
+    if (statusEl && statusEl.textContent === message) {
+      statusEl.textContent = previous;
+    }
+  }
+}
