@@ -142,6 +142,7 @@ button.primary {
   min-height: 1.2em;
   margin: 6px 0 0;
   font-size: 13px;
+  color: var(--accent);
 }
 
 .hidden {

@@ -161,3 +161,33 @@ def test_course_preview_counts_modules():
     assert product["moduleCount"] == 3
     assert product["preview"] == "3 modules in this course"
 
+
+def test_specialization_url_preview_counts_courses():
+    spec = {
+        "elements": [
+            {
+                "slug": "ibm-data-science",
+                "name": "IBM Data Science",
+                "courseIds": ["id-a", "id-b", "id-c"],
+            }
+        ]
+    }
+    courses = {
+        "elements": [
+            {"id": "id-a", "slug": "what-is-data-science", "name": "What is Data Science"},
+            {"id": "id-b", "slug": "tools-for-data-science", "name": "Tools"},
+            {"id": "id-c", "slug": "data-science-methodology", "name": "Methodology"},
+        ]
+    }
+
+    def fake_get(_sess, url, params):
+        if "onDemandSpecializations" in url:
+            return spec
+        return courses
+
+    with patch("courdl_engine.catalog._get_json", side_effect=fake_get):
+        product = resolve_product("https://www.coursera.org/specializations/ibm-data-science")
+    assert product["kind"] == "specialization"
+    assert product["courseCount"] == 3
+    assert product["preview"] == "3 courses in this specialization"
+

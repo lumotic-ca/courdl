@@ -30,6 +30,20 @@ let cancelled = false;
 let previewTimer = 0;
 let previewSeq = 0;
 
+function previewLine(product) {
+  if (!product || typeof product !== "object") return "";
+  if (product.preview) return product.preview;
+  const n = Number(product.courseCount || (product.courses && product.courses.length) || 0);
+  if (n && product.kind && product.kind !== "course") {
+    const label = product.kind === "specialization" ? "specialization" : "certificate";
+    return `${n} ${n === 1 ? "course" : "courses"} in this ${label}`;
+  }
+  if (product.moduleCount) {
+    return `${product.moduleCount} ${product.moduleCount === 1 ? "module" : "modules"} in this course`;
+  }
+  return "";
+}
+
 async function refreshUrlPreview() {
   const value = urlInput.value.trim();
   const seq = ++previewSeq;
@@ -41,7 +55,7 @@ async function refreshUrlPreview() {
   try {
     const product = await invoke("resolve_preview", { input: value });
     if (seq !== previewSeq) return;
-    urlPreview.textContent = (product && product.preview) || "";
+    urlPreview.textContent = previewLine(product);
   } catch (e) {
     if (seq !== previewSeq) return;
     urlPreview.textContent = e.message || "";

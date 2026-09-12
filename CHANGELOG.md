@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.5] - 2026-09-12
+
+### Fixed
+- Paste preview for specializations and certificates. Windows was treating extra engine stdout as success with no `preview`, so the line flashed "Checking URL" then went blank. Parse JSON from the sidecar more strictly and always show `{n} courses in this specialization`.
+
 ## [0.1.4] - 2026-09-11
 
 ### Added

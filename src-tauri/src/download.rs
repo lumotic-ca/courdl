@@ -37,7 +37,82 @@ fn sidecar_command(
 ) -> Result<tauri_plugin_shell::process::Command, String> {
     app.shell()
         .sidecar("courdl-engine")
+        .map(|cmd| {
+            cmd.env("PYTHONUTF8", "1")
+                .env("PYTHONIOENCODING", "utf-8")
+        })
         .map_err(|e| format!("Engine sidecar not found: {e}"))
+}
+
+fn parse_sidecar_json(stdout: &[u8], stderr: &[u8]) -> Result<serde_json::Value, String> {
+    let text = String::from_utf8_lossy(stdout);
+    let trimmed = text.trim();
+    let try_parse = |s: &str| serde_json::from_str::<serde_json::Value>(s).ok();
+    if let Some(v) = try_parse(trimmed) {
+        return Ok(v);
+    }
+    if let Some(start) = trimmed.find('{') {
+        let from_brace = trimmed[start..].trim();
+        if let Some(v) = try_parse(from_brace) {
+            return Ok(v);
+        }
+        if let Some(end) = from_brace.rfind('}') {
+            if let Some(v) = try_parse(&from_brace[..=end]) {
+                return Ok(v);
+            }
+        }
+    }
+    let err = String::from_utf8_lossy(stderr);
+    let err = err.trim();
+    if !err.is_empty() {
+        return Err(err.to_string());
+    }
+    Err(format!(
+        "Engine returned non-JSON: {}",
+        trimmed.chars().take(200).collect::<String>()
+    ))
+}
+
+fn with_preview_fallback(mut value: serde_json::Value) -> serde_json::Value {
+    let Some(obj) = value.as_object_mut() else {
+        return value;
+    };
+    let existing = obj
+        .get("preview")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if existing.is_some() {
+        return value;
+    }
+    let kind = obj
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("course")
+        .to_string();
+    let n = obj
+        .get("courseCount")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            obj.get("courses")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len() as u64)
+        });
+    if let Some(n) = n {
+        if kind != "course" || n > 1 {
+            let label = if kind == "specialization" {
+                "specialization"
+            } else {
+                "certificate"
+            };
+            let word = if n == 1 { "course" } else { "courses" };
+            obj.insert(
+                "preview".into(),
+                serde_json::Value::String(format!("{n} {word} in this {label}")),
+            );
+        }
+    }
+    value
 }
 
 fn is_inside_library(library: &Path, dest: &Path) -> bool {
@@ -125,13 +200,10 @@ fn kill_sidecar(child: CommandChild) {
 pub async fn engine_version(app: AppHandle) -> Envelope<serde_json::Value> {
     match sidecar_command(&app) {
         Ok(cmd) => match cmd.args(["version"]).output().await {
-            Ok(out) if out.status.success() => {
-                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                match serde_json::from_str(&text) {
-                    Ok(v) => crate::error::ok_json(v),
-                    Err(_) => crate::error::ok_json(serde_json::json!({"raw": text})),
-                }
-            }
+            Ok(out) if out.status.success() => match parse_sidecar_json(&out.stdout, &out.stderr) {
+                Ok(v) => crate::error::ok_json(v),
+                Err(msg) => crate::error::err_json("engine", msg),
+            },
             Ok(out) => crate::error::err_json(
                 "engine",
                 String::from_utf8_lossy(&out.stderr).trim().to_string(),
@@ -150,13 +222,10 @@ pub async fn resolve_preview(app: AppHandle, input: String) -> Envelope<serde_js
     }
     match sidecar_command(&app) {
         Ok(cmd) => match cmd.args(["resolve", "--input", &trimmed]).output().await {
-            Ok(out) if out.status.success() => {
-                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                match serde_json::from_str(&text) {
-                    Ok(v) => crate::error::ok_json(v),
-                    Err(_) => crate::error::ok_json(serde_json::json!({"raw": text})),
-                }
-            }
+            Ok(out) if out.status.success() => match parse_sidecar_json(&out.stdout, &out.stderr) {
+                Ok(v) => crate::error::ok_json(with_preview_fallback(v)),
+                Err(msg) => crate::error::err_json("resolve", msg),
+            },
             Ok(out) => crate::error::err_json(
                 "resolve",
                 String::from_utf8_lossy(&out.stderr).trim().to_string(),
@@ -181,13 +250,10 @@ pub async fn check_cookies(app: AppHandle) -> Envelope<serde_json::Value> {
             .output()
             .await
         {
-            Ok(out) if out.status.success() => {
-                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                match serde_json::from_str(&text) {
-                    Ok(v) => crate::error::ok_json(v),
-                    Err(_) => crate::error::ok_json(serde_json::json!({"raw": text})),
-                }
-            }
+            Ok(out) if out.status.success() => match parse_sidecar_json(&out.stdout, &out.stderr) {
+                Ok(v) => crate::error::ok_json(v),
+                Err(msg) => crate::error::err_json("cookies", msg),
+            },
             Ok(out) => crate::error::err_json(
                 "cookies",
                 String::from_utf8_lossy(&out.stderr)

@@ -45,6 +45,7 @@ def _cmd_resolve(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 2
     print(json.dumps(product, ensure_ascii=False, indent=2 if args.pretty else None))
+    sys.stdout.flush()
     return 0
 
 
