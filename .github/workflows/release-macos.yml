@@ -57,10 +57,49 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      - name: Build DMG
+      - name: Build app
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
-        run: npx tauri build --bundles app,dmg
+        run: npx tauri build --bundles app
+
+      - name: Ad-hoc sign and pack DMG
+        run: |
+          set -euo pipefail
+          APP=""
+          for dir in target/release/bundle/macos src-tauri/target/release/bundle/macos; do
+            if [[ -d "$dir/CourDL.app" ]]; then
+              APP="$dir/CourDL.app"
+              break
+            fi
+          done
+          if [[ -z "$APP" ]]; then
+            echo "CourDL.app not found"
+            find . -name 'CourDL.app' -type d | head
+            exit 1
+          fi
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose=2 "$APP" || true
+          STAGE="$(mktemp -d)"
+          cp -R "$APP" "$STAGE/CourDL.app"
+          cat > "$STAGE/Open on macOS.txt" <<'TXT'
+          If macOS says CourDL is damaged and cannot be opened, that is Gatekeeper
+          (the build is unsigned), not a corrupt download.
+
+          After copying CourDL to Applications, run:
+
+            xattr -cr /Applications/CourDL.app
+            open /Applications/CourDL.app
+
+          Apple Silicon only. Intel Macs need a different build.
+          TXT
+          VERSION="$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["version"])')"
+          OUTDIR="target/release/bundle/dmg"
+          mkdir -p "$OUTDIR"
+          DMG="$OUTDIR/CourDL_${VERSION}_aarch64.dmg"
+          rm -f "$DMG"
+          hdiutil create -volname CourDL -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+          ls -l "$DMG"
+
 
       - uses: actions/upload-artifact@v4
         with:

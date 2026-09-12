@@ -21,7 +21,14 @@ npm run dev
 
 Workflow `.github/workflows/release-macos.yml` (manual). It checks out a git ref, builds a PyInstaller sidecar named `courdl-engine-<rustc-host>`, then `tauri build --bundles app,dmg`.
 
-Apple Silicon CI uses `macos-14` (`aarch64-apple-darwin`). The DMG is **unsigned**. First open: right-click the app, choose Open.
+Apple Silicon CI uses `macos-14` (`aarch64-apple-darwin`). The app is **ad-hoc signed, not notarized**. GitHub downloads get a quarantine flag, and macOS reports that as "CourDL is damaged". That is Gatekeeper, not a bad file.
+
+After copying to Applications:
+
+```bash
+xattr -cr /Applications/CourDL.app
+open /Applications/CourDL.app
+```
 
 Example: attach a 0.1.3 Apple Silicon DMG to the existing `v0.1.3` release by dispatching the workflow with `git_ref=v0.1.3` and `release_tag=v0.1.3`.
 
