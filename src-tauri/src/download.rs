@@ -1,5 +1,8 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -16,6 +19,7 @@ pub struct JobState {
     pub child: Mutex<Option<CommandChild>>,
     pub library: Mutex<Option<PathBuf>>,
     pub active_dest: Mutex<Option<PathBuf>>,
+    pub session_log: Mutex<Option<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -24,6 +28,8 @@ pub struct DownloadOptions {
     pub input: String,
     pub skip_existing: bool,
     pub beautify: bool,
+    #[serde(default)]
+    pub session_stamp: Option<String>,
 }
 
 fn sidecar_command(
@@ -55,6 +61,53 @@ fn delete_in_progress(library: Option<&PathBuf>, dest: Option<&PathBuf>) -> Opti
         return Some(dest.display().to_string());
     }
     None
+}
+
+fn safe_stamp(raw: Option<&str>) -> String {
+    let cleaned: String = raw
+        .unwrap_or("")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        .take(32)
+        .collect();
+    if cleaned.is_empty() {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs().to_string())
+            .unwrap_or_else(|_| "session".into())
+    } else {
+        cleaned
+    }
+}
+
+fn create_session_log(library: &Path, stamp: &str, header: &str) -> Result<PathBuf, String> {
+    let dir = library.join("courdl-logs");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create courdl-logs: {e}"))?;
+    let path = dir.join(format!("courdl-{stamp}.txt"));
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .map_err(|e| format!("Could not write session log: {e}"))?;
+    file.write_all(header.as_bytes())
+        .and_then(|_| file.flush())
+        .map_err(|e| format!("Could not write session log: {e}"))?;
+    Ok(path)
+}
+
+fn append_session_log(path: Option<&PathBuf>, line: &str) {
+    let Some(path) = path else {
+        return;
+    };
+    let mut text = line.replace('\r', "");
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = file.write_all(text.as_bytes());
+        let _ = file.flush();
+    }
 }
 
 fn kill_sidecar(child: CommandChild) {
@@ -152,9 +205,9 @@ pub async fn start_download(
     app: AppHandle,
     job: tauri::State<'_, JobState>,
     options: DownloadOptions,
-) -> Result<Envelope<bool>, String> {
+) -> Result<Envelope<serde_json::Value>, String> {
     if options.input.trim().is_empty() {
-        return Ok(crate::error::err::<bool>(
+        return Ok(crate::error::err_json(
             "input",
             "Paste a Coursera URL or course slug.",
         ));
@@ -166,12 +219,12 @@ pub async fn start_download(
             .first()
             .cloned()
             .unwrap_or_else(|| "CourDL is not ready to download.".into());
-        return Ok(crate::error::err::<bool>("prereq", msg));
+        return Ok(crate::error::err_json("prereq", msg));
     }
     {
         let guard = job.child.lock().map_err(|e| e.to_string())?;
         if guard.is_some() {
-            return Ok(crate::error::err::<bool>(
+            return Ok(crate::error::err_json(
                 "busy",
                 "A download is already running. Cancel it first.",
             ));
@@ -188,6 +241,17 @@ pub async fn start_download(
     ensure_dir(std::path::Path::new(&outdir))?;
     *job.library.lock().map_err(|e| e.to_string())? = Some(PathBuf::from(&outdir));
     *job.active_dest.lock().map_err(|e| e.to_string())? = None;
+
+    let stamp = safe_stamp(options.session_stamp.as_deref());
+    let header = format!(
+        "CourDL session\ninput={}\nskip_existing={}\nbeautify={}\nlibrary={}\n---\n",
+        options.input.trim(),
+        options.skip_existing,
+        options.beautify,
+        outdir
+    );
+    let session_path = create_session_log(Path::new(&outdir), &stamp, &header)?;
+    *job.session_log.lock().map_err(|e| e.to_string())? = Some(session_path.clone());
 
     let mut args = vec![
         "download".into(),
@@ -209,9 +273,13 @@ pub async fn start_download(
     let (mut rx, child) = cmd.spawn().map_err(|e| format!("Failed to start engine: {e}"))?;
     *job.child.lock().map_err(|e| e.to_string())? = Some(child);
 
-    let _ = app.emit("download-started", ());
+    let _ = app.emit(
+        "download-started",
+        serde_json::json!({ "sessionLog": session_path.display().to_string() }),
+    );
 
     let app_clone = app.clone();
+    let session_for_loop = session_path.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
             match event {
@@ -232,24 +300,41 @@ pub async fn start_download(
                                         }
                                     }
                                 }
+                                if let Some(msg) = json.get("message").and_then(|v| v.as_str()) {
+                                    let phase = json.get("phase").and_then(|v| v.as_str()).unwrap_or("");
+                                    append_session_log(
+                                        Some(&session_for_loop),
+                                        &format!("[{phase}] {msg}"),
+                                    );
+                                }
                                 let _ = app_clone.emit("download-progress", json);
                                 continue;
                             }
                         }
+                        append_session_log(Some(&session_for_loop), piece);
                         let _ = app_clone.emit("download-log", piece.to_string());
                     }
                 }
                 CommandEvent::Terminated(payload) => {
+                    append_session_log(
+                        Some(&session_for_loop),
+                        &format!(
+                            "---\nengine_exit code={:?} signal={:?}",
+                            payload.code, payload.signal
+                        ),
+                    );
                     let _ = app_clone.emit(
                         "download-finished",
                         serde_json::json!({
                             "code": payload.code,
                             "signal": payload.signal,
+                            "sessionLog": session_for_loop.display().to_string(),
                         }),
                     );
                     break;
                 }
                 CommandEvent::Error(message) => {
+                    append_session_log(Some(&session_for_loop), &format!("[error] {message}"));
                     let _ = app_clone.emit("download-log", format!("[error] {message}\n"));
                 }
                 _ => {}
@@ -260,7 +345,10 @@ pub async fn start_download(
         }
     });
 
-    Ok(ok(true))
+    Ok(crate::error::ok_json(serde_json::json!({
+        "started": true,
+        "sessionLog": session_path.display().to_string(),
+    })))
 }
 
 #[tauri::command]
@@ -277,17 +365,27 @@ pub fn cancel_download(app: AppHandle, job: tauri::State<JobState>) -> Envelope<
     }
     let dest = job.active_dest.lock().ok().and_then(|g| g.clone());
     let library = job.library.lock().ok().and_then(|g| g.clone());
+    let session = job.session_log.lock().ok().and_then(|g| g.clone());
     let removed = delete_in_progress(library.as_ref(), dest.as_ref());
+    if let Some(ref path) = session {
+        let note = match &removed {
+            Some(p) => format!("cancelled; deleted in-progress folder {p}"),
+            None => "cancelled".into(),
+        };
+        append_session_log(Some(path), &format!("---\n{note}"));
+    }
     if let Ok(mut dest_guard) = job.active_dest.lock() {
         *dest_guard = None;
     }
+    let session_log = session.as_ref().map(|p| p.display().to_string());
     let _ = app.emit(
         "download-cancelled",
-        serde_json::json!({ "removed": removed }),
+        serde_json::json!({ "removed": removed, "sessionLog": session_log }),
     );
     crate::error::ok_json(serde_json::json!({
         "cancelled": true,
         "removed": removed,
+        "sessionLog": session_log,
     }))
 }
 

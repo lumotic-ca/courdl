@@ -50,7 +50,7 @@ pub fn list_library(app: AppHandle) -> Envelope<Vec<LibraryItem>> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') {
+        if name.starts_with('.') || name == "courdl-logs" {
             continue;
         }
         if looks_like_course(&path) {

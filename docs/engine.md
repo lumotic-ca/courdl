@@ -31,6 +31,8 @@ courdl-engine beautify --path ~/Documents/CourDL/<slug> --cookies cookies.txt
 
 Certificates expand to each `/learn/` course and download **one course at a time**. Keep `.cache/crawl.json` if you want to re-beautify without crawling again.
 
+The desktop app writes one session log per Download click: `<library>/courdl-logs/courdl-YYYYMMDD-HHMMSS.txt`. Cookie values are not written there.
+
 ## Beautify behavior
 
 - Flatten `untitled-lesson`

@@ -7,6 +7,8 @@
 - Certificate and specialization URLs expand to each `/learn/` course, then download **one course at a time**.
 - Cancel kills the engine process tree (Windows `taskkill /T`) and deletes only the course folder that was in progress. Finished sibling courses in a certificate stay on disk.
 - Windows-safe asset names before `open()` (signed `?key=` / `?expiry=` URLs). Extra files that still fail warn; missing lectures still fail the course.
+- Session logs: each download writes `courdl-logs/courdl-YYYYMMDD-HHMMSS.txt` in the library folder. The on-screen log still clears when you start a new run; the files stay.
+- macOS DMG workflow (Apple Silicon, unsigned). A 0.1.3 Mac build is attached to the `v0.1.3` GitHub Release, not to 0.1.4.
 
 ### Changed
 - Skip-existing requires lecture files (`mp4`, `srt`, or `html`) outside `.cache`.

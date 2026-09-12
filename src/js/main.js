@@ -77,6 +77,12 @@ async function loadAll() {
   return { report, settings };
 }
 
+function sessionStamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, "0")}`;
+}
+
 function setBusy(on) {
   running = on;
   downloadBtn.disabled = on;
@@ -182,6 +188,7 @@ form.addEventListener("submit", async (ev) => {
         input: urlInput.value.trim(),
         skipExisting: skipExisting.checked,
         beautify: runBeautify.checked,
+        sessionStamp: sessionStamp(),
       },
     });
   } catch (e) {
@@ -196,10 +203,12 @@ cancelBtn.addEventListener("click", async () => {
     cancelled = true;
     setBusy(false);
     const removed = result && result.removed;
+    const logPath = result && result.sessionLog;
     appendLog(logEl, removed ? `Cancel: stopped the engine and deleted ${removed}\n` : "Cancel: stopped the engine.\n");
+    if (logPath) appendLog(logEl, `Session log: ${logPath}\n`);
     jobStatus.textContent = removed
-      ? "Cancelled. In-progress course folder removed."
-      : "Cancelled.";
+      ? `Cancelled. In-progress course folder removed.${logPath ? ` Log: ${logPath}` : ""}`
+      : `Cancelled.${logPath ? ` Log: ${logPath}` : ""}`;
     await refreshLibrary(libraryList).catch(() => {});
   } catch (e) {
     setBusy(false);
@@ -218,12 +227,14 @@ listen("download-progress", (ev) => {
   }
 });
 
-listen("download-started", () => {
-  jobStatus.textContent = "Download running…";
+listen("download-started", (ev) => {
+  const logPath = ev.payload && ev.payload.sessionLog;
+  jobStatus.textContent = logPath ? `Download running. Session log: ${logPath}` : "Download running…";
 });
 
 listen("download-finished", (ev) => {
   setBusy(false);
+  const logPath = ev.payload && ev.payload.sessionLog;
   if (cancelled) {
     cancelled = false;
     refreshLibrary(libraryList).catch(() => {});
@@ -231,10 +242,12 @@ listen("download-finished", (ev) => {
   }
   const code = ev.payload && ev.payload.code;
   if (code === 0) {
-    jobStatus.textContent = "Finished.";
+    jobStatus.textContent = logPath ? `Finished. Session log: ${logPath}` : "Finished.";
     setProgress(progressEl, { phase: "done", message: "Finished" });
   } else {
-    jobStatus.textContent = `Engine exited with code ${code}. Check the log.`;
+    jobStatus.textContent = logPath
+      ? `Engine exited with code ${code}. Session log: ${logPath}`
+      : `Engine exited with code ${code}. Check the log.`;
   }
   refreshLibrary(libraryList).catch(() => {});
   loadAll().catch(() => {});

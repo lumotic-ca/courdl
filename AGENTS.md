@@ -41,6 +41,6 @@ Certificate URLs expand in `courdl_engine/catalog.py`. Do not pass a cert slug i
 
 Windows-unsafe asset names are sanitized in `courdl_engine/paths.py` before `open()`. Do not edit `dl_coursera` site-packages.
 
-Cancel must kill the sidecar process tree and delete only the in-progress course folder under the library path.
+Cancel must kill the sidecar process tree and delete only the in-progress course folder under the library path. Each GUI download must append a `courdl-logs/courdl-*.txt` session file in the library. Do not put cookie values in that file.
 
 Changelog: user-facing engine or GUI behavior goes in [CHANGELOG.md](CHANGELOG.md).
