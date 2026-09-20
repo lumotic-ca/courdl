@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7] - 2026-09-20
+
+### Fixed
+- Certificate and specialization downloads name each course folder `01 - Full Title` in syllabus order. Previously the GUI left slug folders (`foundations-data`), so Finder sorted them alphabetically.
+
+### Changed
+- Skip-existing finds a course after it has been renamed to a numbered title. Certificate README files link to those folders.
+
 ## [0.1.6] - 2026-09-12
 
 ### Fixed

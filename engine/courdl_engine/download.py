@@ -11,7 +11,15 @@ from pathlib import Path
 import requests
 
 from courdl_engine import progress
-from courdl_engine.beautify import beautify_tree, load_cookies, safe_name
+from courdl_engine.beautify import (
+    apply_certificate_order,
+    beautify_tree,
+    find_existing_course_dir,
+    load_cookies,
+    numbered_course,
+    safe_name,
+    save_product,
+)
 from courdl_engine.catalog import CatalogError, resolve_product
 from courdl_engine.cookies import check_cookies_file
 from courdl_engine.paths import (
@@ -232,11 +240,12 @@ def download_one(
     no_beautify: bool = False,
 ) -> Path:
     dest = outdir / slug
-    _emit("dest", f"Writing {dest}", path=str(dest), slug=slug)
-    if skip_existing and _course_ready(dest):
-        _emit("skip", f"Already present, skipping download: {dest}")
-        _log(f"Skip existing: {dest}")
-        return dest
+    existing = find_existing_course_dir(outdir, slug)
+    _emit("dest", f"Writing {dest}", path=str(existing or dest), slug=slug)
+    if skip_existing and existing and _course_ready(existing):
+        _emit("skip", f"Already present, skipping download: {existing}")
+        _log(f"Skip existing: {existing}")
+        return existing
 
     _emit("download", "Starting dl_coursera", slug=slug)
     _log(f"Downloading {slug} into {outdir}")
@@ -269,12 +278,16 @@ def _write_product_readme(root: Path, product: dict) -> None:
     lines = [
         f"# {product.get('name') or product.get('slug')}",
         "",
+        "Courses in syllabus order:",
+        "",
     ]
+    used: set[str] = set()
     for i, course in enumerate(product.get("courses") or [], start=1):
         name = course.get("name") or course.get("slug")
         slug = course.get("slug")
+        folder = numbered_course(i, name or "course", used)
         url = course.get("url") or f"https://www.coursera.org/learn/{slug}"
-        lines.append(f"{i}. [{name}]({slug}/) (`{url}`)")
+        lines.append(f"{i}. [{name}]({folder}/README.md) (`{url}`)")
     lines.append("")
     (root / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -332,6 +345,8 @@ def download(
             skip_existing=skip_existing,
             no_beautify=no_beautify,
         )
+    apply_certificate_order(root, courses)
+    save_product(root, product)
     _write_product_readme(root, product)
     _emit("done", f"Finished {total} courses", path=str(root), current=total, total=total)
     return root

@@ -29,12 +29,13 @@ courdl-engine download --cookies cookies.txt --outdir ~/Documents/CourDL --input
 courdl-engine beautify --path ~/Documents/CourDL/<slug> --cookies cookies.txt
 ```
 
-Certificates expand to each `/learn/` course and download **one course at a time**. Keep `.cache/crawl.json` if you want to re-beautify without crawling again.
+Certificates expand to each `/learn/` course and download **one course at a time**. After the last course, sibling folders are renamed `01 - Full Title` in catalog order. Keep `.cache/crawl.json` if you want to re-beautify without crawling again.
 
 The desktop app writes one session log per Download click: `<library>/courdl-logs/courdl-YYYYMMDD-HHMMSS.txt`. Cookie values are not written there.
 
 ## Beautify behavior
 
 - Flatten `untitled-lesson`
+- Number certificate course folders in syllabus order with full titles
 - Match course folders when slugs are longer than 40 characters
 - List syllabus items that were not downloaded (quizzes, assignments) in each course README

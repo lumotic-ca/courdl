@@ -45,8 +45,26 @@ def safe_name(text: str, max_len: int = 80) -> str:
     return text or "untitled"
 
 
-def numbered(index: int, title: str) -> str:
-    return f"{index:02d} - {safe_name(title)}"
+NUMBERED_DIR = re.compile(r"^\d{2} - ")
+COURSE_TITLE_MAX = 160
+PRODUCT_JSON = "courdl-product.json"
+
+
+def numbered(index: int, title: str, max_len: int = 80) -> str:
+    return f"{index:02d} - {safe_name(title, max_len=max_len)}"
+
+
+def numbered_course(index: int, title: str, used: set[str] | None = None) -> str:
+    """Syllabus-order folder name: 01 - Full Course Title."""
+    name = numbered(index, title or "course", max_len=COURSE_TITLE_MAX)
+    used_set = used if used is not None else set()
+    candidate = name
+    n = 2
+    while candidate.lower() in {item.lower() for item in used_set}:
+        candidate = f"{name} ({n})"
+        n += 1
+    used_set.add(candidate)
+    return candidate
 
 
 def load_cookies(path: Path) -> requests.Session | None:
@@ -122,27 +140,285 @@ def old_dir_name(index: int, slug: str) -> str:
     return f"{index:02d}@{slug}"
 
 
-def resolve_course_dir(root: Path, index: int, course: dict) -> Path:
-    slug = (course.get("slug") or "").strip()
-    name = course.get("name") or slug or "course"
-    candidates = [
-        root / numbered(index, name),
-        root / f"{index:02d}@{slug}",
-        root / old_dir_name(index, slug),
-        root / slug,
-    ]
+def load_crawl(course_dir: Path) -> dict:
+    cache = course_dir / ".cache" / "crawl.json"
+    if not cache.is_file():
+        return {}
+    try:
+        data = json.loads(cache.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def course_slug_from_dir(course_dir: Path) -> str | None:
+    slug = (load_crawl(course_dir).get("slug") or "").strip()
+    if slug:
+        return slug
+    if course_dir.name and not NUMBERED_DIR.match(course_dir.name) and course_dir.name != "resource":
+        return course_dir.name
+    return None
+
+
+def course_title_from_dir(course_dir: Path, fallback: str = "") -> str:
+    name = (load_crawl(course_dir).get("name") or "").strip()
+    return name or fallback or course_dir.name
+
+
+def find_existing_course_dir(
+    root: Path,
+    slug: str,
+    index: int | None = None,
+    name: str | None = None,
+) -> Path | None:
+    slug = (slug or "").strip()
+    title = name or slug or "course"
+    candidates: list[Path] = []
+    if slug:
+        candidates.append(root / slug)
+    if index is not None:
+        candidates.append(root / numbered_course(index, title))
+        candidates.append(root / numbered(index, title))
+        candidates.append(root / f"{index:02d}@{slug}")
+        candidates.append(root / old_dir_name(index, slug))
     for path in candidates:
         if path.is_dir():
             return path
-    prefix = f"{index:02d}@"
+    if not root.is_dir():
+        return None
+    prefix = f"{index:02d}@" if index is not None else None
     slug_key = slug[:40]
-    for child in sorted(root.iterdir()):
-        if not child.is_dir() or not child.name.startswith(prefix):
+    for child in root.iterdir():
+        if not child.is_dir() or child.name.startswith(".") or child.name == "resource":
             continue
-        suffix = child.name[len(prefix) :]
-        if slug.startswith(suffix) or suffix.startswith(slug_key) or slug_key.startswith(suffix):
+        got = course_slug_from_dir(child)
+        if slug and got == slug:
             return child
+        if prefix and child.name.startswith(prefix):
+            suffix = child.name[len(prefix) :]
+            if slug.startswith(suffix) or suffix.startswith(slug_key) or slug_key.startswith(suffix):
+                return child
+    return None
+
+
+def resolve_course_dir(root: Path, index: int, course: dict) -> Path:
+    slug = (course.get("slug") or "").strip()
+    name = course.get("name") or slug or "course"
+    found = find_existing_course_dir(root, slug, index, name)
+    if found:
+        return found
     raise FileNotFoundError(f"No course folder for {index:02d}: {slug or name}")
+
+
+def sibling_course_dirs(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    out = []
+    for child in root.iterdir():
+        if not child.is_dir() or child.name.startswith(".") or child.name in {"resource", "courdl-logs"}:
+            continue
+        if (child / ".cache" / "crawl.json").is_file() or NUMBERED_DIR.match(child.name):
+            out.append(child)
+    return out
+
+
+def parse_course_links(path: Path) -> dict[str, list[str]]:
+    """Certificate title -> course slugs in the order listed."""
+    from courdl_engine.slug import SlugError, slug_from_input
+
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    if not path.is_file():
+        return sections
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if "coursera.org/learn/" in line or line.startswith("http"):
+            if not current:
+                continue
+            try:
+                slug = slug_from_input(line)
+            except SlugError:
+                continue
+            sections.setdefault(current, []).append(slug)
+            continue
+        current = line
+        sections.setdefault(current, [])
+    return sections
+
+
+def _folder_slug_guesses(name: str) -> list[str]:
+    def slugify(text: str) -> str:
+        text = text.lower().replace("&", " and ")
+        text = re.sub(r"[^a-z0-9]+", "-", text)
+        return text.strip("-")
+
+    guesses = []
+    trimmed = name.strip()
+    for source in (
+        trimmed,
+        re.sub(
+            r"\b((professional|google|ibm|meta|microsoft)\s+)?(certificate|specialization|cert)\b",
+            "",
+            trimmed,
+            flags=re.I,
+        ),
+    ):
+        guess = slugify(source)
+        if guess and guess not in guesses:
+            guesses.append(guess)
+    return guesses
+
+
+def try_catalog_courses(root: Path) -> list[dict]:
+    from courdl_engine.catalog import resolve_product
+
+    child_slugs = {course_slug_from_dir(p) for p in sibling_course_dirs(root)}
+    child_slugs.discard(None)
+    if len(child_slugs) < 2:
+        return []
+    for guess in _folder_slug_guesses(root.name):
+        for value in (
+            guess,
+            f"https://www.coursera.org/professional-certificates/{guess}",
+            f"https://www.coursera.org/specializations/{guess}",
+        ):
+            try:
+                product = resolve_product(value)
+            except Exception:
+                continue
+            courses = product.get("courses") or []
+            slugs = [c.get("slug") for c in courses if c.get("slug")]
+            if set(slugs) & child_slugs:
+                return courses
+    return []
+
+
+def courses_in_syllabus_order(root: Path, link_slugs: list[str] | None = None) -> list[dict]:
+    """Build an ordered course list from links, Coursera catalog, then leftover folders."""
+    by_slug: dict[str, Path] = {}
+    for child in sibling_course_dirs(root):
+        slug = course_slug_from_dir(child)
+        if slug:
+            by_slug[slug] = child
+
+    ordered: list[dict] = []
+    used: set[str] = set()
+
+    def add(slug: str, name: str = "") -> None:
+        if not slug or slug in used or slug not in by_slug:
+            return
+        path = by_slug[slug]
+        ordered.append(
+            {
+                "slug": slug,
+                "name": course_title_from_dir(path, name or slug),
+                "url": f"https://www.coursera.org/learn/{slug}",
+            }
+        )
+        used.add(slug)
+
+    for slug in link_slugs or []:
+        add(slug)
+    if not ordered:
+        for course in try_catalog_courses(root):
+            add(course.get("slug") or "", course.get("name") or "")
+    for slug in by_slug:
+        add(slug)
+    return ordered
+
+
+def apply_certificate_order(root: Path, courses: list[dict]) -> list[Path]:
+    """Rename sibling course folders to NN - Full Title using syllabus order."""
+    if not root.is_dir() or not courses:
+        return []
+    used: set[str] = set()
+    plan: list[tuple[Path, Path]] = []
+    for i, course in enumerate(courses, start=1):
+        slug = (course.get("slug") or "").strip()
+        name = course.get("name") or slug or f"Course {i}"
+        src = find_existing_course_dir(root, slug, i, name)
+        if src is None:
+            continue
+        dest = root / numbered_course(i, name, used)
+        if src.resolve() != dest.resolve():
+            plan.append((src, dest))
+    temps: list[tuple[Path, Path]] = []
+    for i, (src, dest) in enumerate(plan, start=1):
+        tmp = root / f"_courdl_tmp_{i:02d}_{src.name[:48]}"
+        n = 1
+        while tmp.exists():
+            n += 1
+            tmp = root / f"_courdl_tmp_{i:02d}_{n}_{src.name[:40]}"
+        src.rename(tmp)
+        temps.append((tmp, dest))
+    result: list[Path] = []
+    for tmp, dest in temps:
+        if dest.exists():
+            result.append(tmp)
+            continue
+        tmp.rename(dest)
+        result.append(dest)
+    return result
+
+
+def save_product(root: Path, product: dict) -> None:
+    path = root / PRODUCT_JSON
+    path.write_text(json.dumps(product, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def load_product(root: Path) -> dict:
+    path = root / PRODUCT_JSON
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def apply_library_certificate_order(library: Path, links_file: Path | None = None) -> list[dict]:
+    """Number every multi-course folder under a library. Returns a report."""
+    links = parse_course_links(links_file) if links_file else {}
+    by_title = {key.strip().casefold(): slugs for key, slugs in links.items()}
+    report = []
+    for child in sorted(library.iterdir(), key=lambda p: p.name.lower()):
+        if not child.is_dir() or child.name.startswith(".") or child.name == "courdl-logs":
+            continue
+        if len(sibling_course_dirs(child)) < 2:
+            continue
+        if all(NUMBERED_DIR.match(p.name) for p in sibling_course_dirs(child)):
+            report.append({"folder": child.name, "status": "already-numbered", "count": 0})
+            continue
+        link_slugs = by_title.get(child.name.strip().casefold())
+        courses = courses_in_syllabus_order(child, link_slugs)
+        if len(courses) < 2:
+            report.append({"folder": child.name, "status": "skipped", "count": 0})
+            continue
+        try:
+            apply_certificate_order(child, courses)
+            product = {
+                "name": child.name,
+                "slug": child.name,
+                "kind": "certificate",
+                "courses": courses,
+            }
+            save_product(child, product)
+            write_spec_readme(child, product)
+        except OSError as exc:
+            report.append({"folder": child.name, "status": "error", "error": str(exc)})
+            continue
+        report.append(
+            {
+                "folder": child.name,
+                "status": "numbered",
+                "count": len(courses),
+                "names": [numbered_course(i, c.get("name") or c.get("slug") or "course") for i, c in enumerate(courses, start=1)],
+            }
+        )
+    return report
 
 
 def flatten_untitled_lessons(module_dir: Path) -> None:
@@ -315,10 +591,11 @@ def write_spec_readme(spec_dir: Path, spec: dict, meta: dict | None = None) -> N
             lines += [desc, ""]
     lines.append("Courses in syllabus order:")
     lines.append("")
+    used: set[str] = set()
     for i, course in enumerate(spec.get("courses") or [], start=1):
         name = course.get("name") or course.get("slug")
         slug = course.get("slug")
-        folder = numbered(i, name)
+        folder = numbered_course(i, name or "course", used)
         lines.append(f"{i}. [{name}]({folder}/README.md) (`{slug}`)")
     lines += [
         "",
@@ -333,18 +610,44 @@ def write_spec_readme(spec_dir: Path, spec: dict, meta: dict | None = None) -> N
 
 def beautify_tree(root: Path, sess: requests.Session | None) -> None:
     cache = root / ".cache" / "crawl.json"
-    if not cache.is_file():
-        raise SystemExit(f"No crawl.json under {root}")
-    data = json.loads(cache.read_text(encoding="utf-8"))
-    if data.get("type") == "Spec":
-        for i, course in enumerate(data.get("courses") or [], start=1):
-            old = resolve_course_dir(root, i, course)
-            beautify_course(old, course, sess)
-            rename_path(old, root / numbered(i, course.get("name") or course.get("slug") or "course"))
-        meta = fetch_spec_meta(sess, data["slug"]) if sess else {}
-        write_spec_readme(root, data, meta)
+    if cache.is_file():
+        data = json.loads(cache.read_text(encoding="utf-8"))
+        if data.get("type") == "Spec":
+            courses = data.get("courses") or []
+            for i, course in enumerate(courses, start=1):
+                old = resolve_course_dir(root, i, course)
+                beautify_course(old, course, sess)
+            apply_certificate_order(root, courses)
+            meta = fetch_spec_meta(sess, data["slug"]) if sess else {}
+            write_spec_readme(root, data, meta)
+            save_product(root, data)
+            return
+        beautify_course(root, data, sess)
         return
-    beautify_course(root, data, sess)
+
+    product = load_product(root)
+    courses = product.get("courses") or courses_in_syllabus_order(root)
+    if len(courses) >= 2:
+        for i, course in enumerate(courses, start=1):
+            found = find_existing_course_dir(root, course.get("slug") or "", i, course.get("name"))
+            if found is None:
+                continue
+            data = load_crawl(found)
+            if data.get("modules"):
+                beautify_course(found, data, sess)
+        apply_certificate_order(root, courses)
+        product = product or {
+            "name": root.name,
+            "slug": root.name,
+            "kind": "certificate",
+            "courses": courses,
+        }
+        product["courses"] = courses
+        save_product(root, product)
+        write_spec_readme(root, product)
+        return
+
+    raise SystemExit(f"No crawl.json under {root}")
 
 
 def main() -> None:
