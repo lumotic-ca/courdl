@@ -12,6 +12,7 @@ import json
 import re
 import shutil
 import sys
+import time
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 
@@ -46,12 +47,52 @@ def safe_name(text: str, max_len: int = 80) -> str:
 
 
 NUMBERED_DIR = re.compile(r"^\d{2} - ")
+TMP_DIR = re.compile(r"^_courdl_tmp_\d+")
 COURSE_TITLE_MAX = 160
 PRODUCT_JSON = "courdl-product.json"
+PRODUCT_TITLE_MAX = 160
 
 
 def numbered(index: int, title: str, max_len: int = 80) -> str:
     return f"{index:02d} - {safe_name(title, max_len=max_len)}"
+
+
+def retryable_fs_error(exc: BaseException) -> bool:
+    if isinstance(exc, PermissionError):
+        return True
+    if not isinstance(exc, OSError):
+        return False
+    winerror = getattr(exc, "winerror", None)
+    if winerror in {5, 32, 33}:
+        return True
+    return getattr(exc, "errno", None) in {11, 13, 16}
+
+
+def move_path(src: Path, dest: Path, *, retries: int = 10, delay: float = 0.4) -> Path:
+    """Rename/move a folder, retrying Windows SMB locks (WinError 5)."""
+    if src == dest:
+        return src
+    try:
+        if src.exists() and dest.exists() and src.resolve() == dest.resolve():
+            return dest
+    except OSError:
+        pass
+    if not src.exists():
+        return dest if dest.exists() else src
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last: BaseException | None = None
+    for attempt in range(retries):
+        try:
+            shutil.move(str(src), str(dest))
+            return dest
+        except OSError as exc:
+            last = exc
+            if not retryable_fs_error(exc) or attempt == retries - 1:
+                raise
+            time.sleep(delay * (attempt + 1))
+    raise last or OSError(f"Could not move {src} to {dest}")
 
 
 def numbered_course(index: int, title: str, used: set[str] | None = None) -> str:
@@ -324,7 +365,15 @@ def courses_in_syllabus_order(root: Path, link_slugs: list[str] | None = None) -
     if not ordered:
         for course in try_catalog_courses(root):
             add(course.get("slug") or "", course.get("name") or "")
-    for slug in by_slug:
+    leftovers = []
+    for slug, path in by_slug.items():
+        if slug in used:
+            continue
+        match = re.match(r"^_courdl_tmp_(\d+)", path.name)
+        idx = int(match.group(1)) if match else None
+        leftovers.append((idx is None, idx if idx is not None else 10**6, path.name.lower(), slug))
+    leftovers.sort()
+    for _missing, _idx, _name, slug in leftovers:
         add(slug)
     return ordered
 
@@ -342,25 +391,56 @@ def apply_certificate_order(root: Path, courses: list[dict]) -> list[Path]:
         if src is None:
             continue
         dest = root / numbered_course(i, name, used)
-        if src.resolve() != dest.resolve():
+        try:
+            same = src.resolve() == dest.resolve()
+        except OSError:
+            same = src == dest
+        if not same:
             plan.append((src, dest))
-    temps: list[tuple[Path, Path]] = []
-    for i, (src, dest) in enumerate(plan, start=1):
-        tmp = root / f"_courdl_tmp_{i:02d}_{src.name[:48]}"
-        n = 1
-        while tmp.exists():
-            n += 1
-            tmp = root / f"_courdl_tmp_{i:02d}_{n}_{src.name[:40]}"
-        src.rename(tmp)
-        temps.append((tmp, dest))
-    result: list[Path] = []
-    for tmp, dest in temps:
-        if dest.exists():
-            result.append(tmp)
-            continue
-        tmp.rename(dest)
-        result.append(dest)
-    return result
+    if not plan:
+        return []
+
+    src_ids = []
+    for src, _dest in plan:
+        try:
+            src_ids.append(src.resolve())
+        except OSError:
+            src_ids.append(src)
+    use_tmp = False
+    for src, dest in plan:
+        try:
+            dest_id = dest.resolve() if dest.exists() else dest
+        except OSError:
+            dest_id = dest
+        if dest.exists() and dest_id in src_ids:
+            use_tmp = True
+            break
+
+    if not use_tmp:
+        return [move_path(src, dest) for src, dest in plan]
+
+    temps: list[tuple[Path, Path, Path]] = []
+    try:
+        for i, (src, dest) in enumerate(plan, start=1):
+            tmp = root / f"_courdl_tmp_{i:02d}_{src.name[:48]}"
+            n = 1
+            while tmp.exists():
+                n += 1
+                tmp = root / f"_courdl_tmp_{i:02d}_{n}_{src.name[:40]}"
+            move_path(src, tmp)
+            temps.append((src, tmp, dest))
+        result: list[Path] = []
+        for _src, tmp, dest in temps:
+            result.append(move_path(tmp, dest))
+        return result
+    except OSError:
+        for src, tmp, _dest in reversed(temps):
+            if tmp.exists() and not src.exists():
+                try:
+                    move_path(tmp, src, retries=4, delay=0.3)
+                except OSError:
+                    pass
+        raise
 
 
 def save_product(root: Path, product: dict) -> None:
@@ -441,15 +521,7 @@ def flatten_untitled_lessons(module_dir: Path) -> None:
 
 
 def rename_path(src: Path, dest: Path) -> Path:
-    if src == dest:
-        return src
-    if not src.exists():
-        return dest if dest.exists() else src
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    src.rename(dest)
-    return dest
+    return move_path(src, dest)
 
 
 def rename_media(item_dir: Path, title: str) -> None:

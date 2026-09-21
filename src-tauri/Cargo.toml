@@ -1,6 +1,6 @@
 [package]
 name = "courdl"
-version = "0.1.7"
+version = "0.1.8"
 description = "CourDL desktop app"
 authors = ["lumotic-ca"]
 edition = "2021"

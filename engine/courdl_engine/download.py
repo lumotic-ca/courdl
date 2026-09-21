@@ -16,9 +16,12 @@ from courdl_engine.beautify import (
     beautify_tree,
     find_existing_course_dir,
     load_cookies,
+    load_product,
+    move_path,
     numbered_course,
     safe_name,
     save_product,
+    PRODUCT_TITLE_MAX,
 )
 from courdl_engine.catalog import CatalogError, resolve_product
 from courdl_engine.cookies import check_cookies_file
@@ -330,8 +333,25 @@ def download(
         _emit("done", "Finished", path=str(dest))
         return dest
 
-    root = outdir / safe_name(product.get("name") or product.get("slug") or "certificate")
-    root.mkdir(parents=True, exist_ok=True)
+    folder = safe_name(product.get("name") or product.get("slug") or "certificate", max_len=PRODUCT_TITLE_MAX)
+    root = outdir / folder
+    slug = product.get("slug") or ""
+    if not root.is_dir() and slug:
+        slug_dir = outdir / slug
+        if slug_dir.is_dir():
+            root = move_path(slug_dir, root)
+        else:
+            for child in outdir.iterdir() if outdir.is_dir() else []:
+                if not child.is_dir():
+                    continue
+                stored = load_product(child)
+                if stored.get("slug") == slug:
+                    root = move_path(child, root)
+                    break
+            else:
+                root.mkdir(parents=True, exist_ok=True)
+    else:
+        root.mkdir(parents=True, exist_ok=True)
     total = len(courses)
     _log(f"Certificate download: {total} courses, one at a time")
     for i, course in enumerate(courses, start=1):
@@ -345,7 +365,13 @@ def download(
             skip_existing=skip_existing,
             no_beautify=no_beautify,
         )
-    apply_certificate_order(root, courses)
+    try:
+        apply_certificate_order(root, courses)
+    except OSError as exc:
+        raise DownloadError(
+            "Could not rename course folders. A file is still in use on the share "
+            f"(often File Explorer). Close that folder and run Beautify again: {exc}"
+        ) from exc
     save_product(root, product)
     _write_product_readme(root, product)
     _emit("done", f"Finished {total} courses", path=str(root), current=total, total=total)

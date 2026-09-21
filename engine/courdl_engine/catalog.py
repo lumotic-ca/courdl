@@ -12,6 +12,7 @@ UA = "Mozilla/5.0 (compatible; CourDL/1.0)"
 SPEC_URL = "https://www.coursera.org/api/onDemandSpecializations.v1"
 COURSE_URL = "https://www.coursera.org/api/onDemandCourses.v1"
 MATERIALS_URL = "https://www.coursera.org/api/onDemandCourseMaterials.v2/"
+PARTNERS_URL = "https://www.coursera.org/api/partners.v1"
 
 _PATH = re.compile(
     r"/(learn|specializations|professional-certificates)/([^/?#]+)",
@@ -59,7 +60,11 @@ def _spec_element(sess: requests.Session, slug: str) -> dict[str, Any] | None:
     data = _get_json(
         sess,
         SPEC_URL,
-        {"q": "slug", "slug": slug, "fields": "name,slug,courseIds,tagline"},
+        {
+            "q": "slug",
+            "slug": slug,
+            "fields": "name,slug,courseIds,tagline,partnerIds,productVariant",
+        },
     )
     els = data.get("elements") or []
     if not els:
@@ -89,6 +94,51 @@ def _courses_by_ids(sess: requests.Session, ids: list[str]) -> dict[str, dict[st
                 "name": el.get("name") or slug,
             }
     return out
+
+
+def _partners_by_ids(sess: requests.Session, ids: list[str]) -> list[str]:
+    if not ids:
+        return []
+    data = _get_json(sess, PARTNERS_URL, {"ids": ",".join(ids)})
+    by_id = {
+        str(el.get("id")): (el.get("name") or "").strip()
+        for el in data.get("elements") or []
+    }
+    return [by_id[i] for i in ids if by_id.get(i)]
+
+
+def product_kind_from_spec(kind: str, variant: str) -> str:
+    if kind in ("specialization", "professional-certificate"):
+        return kind
+    if "ProfessionalCertificate" in (variant or ""):
+        return "professional-certificate"
+    return "specialization"
+
+
+def display_product_name(
+    name: str,
+    *,
+    kind: str = "",
+    product_variant: str = "",
+    partners: list[str] | None = None,
+) -> str:
+    """Folder/title as shown on Coursera: company + product + Certificate/Specialization."""
+    title = (name or "").strip() or "certificate"
+    for partner in partners or []:
+        partner = (partner or "").strip()
+        if partner and partner.casefold() not in title.casefold():
+            title = f"{partner} {title}"
+            break
+    kind = kind or ""
+    variant = product_variant or ""
+    is_cert = kind == "professional-certificate" or "ProfessionalCertificate" in variant
+    is_spec = kind == "specialization" or variant == "NormalS12n"
+    lower = title.casefold()
+    if is_cert and "certificate" not in lower:
+        title = f"{title} Certificate"
+    elif is_spec and "specialization" not in lower and "certificate" not in lower:
+        title = f"{title} Specialization"
+    return title
 
 
 def count_modules(sess: requests.Session, slug: str) -> int | None:
@@ -176,12 +226,23 @@ def resolve_product(value: str) -> dict[str, Any]:
             raise CatalogError(
                 f"Certificate or specialization '{slug}' listed courses, but none resolved to /learn/ slugs yet."
             )
-        product_kind = kind if kind in ("specialization", "professional-certificate") else "specialization"
+        product_kind = product_kind_from_spec(kind, spec.get("productVariant") or "")
+        api_name = spec.get("name") or slug
+        partners = _partners_by_ids(sess, [str(x) for x in spec.get("partnerIds") or []])
+        display = display_product_name(
+            api_name,
+            kind=product_kind,
+            product_variant=spec.get("productVariant") or "",
+            partners=partners,
+        )
         return _with_preview(
             {
                 "kind": product_kind,
                 "slug": spec.get("slug") or slug,
-                "name": spec.get("name") or slug,
+                "name": display,
+                "apiName": api_name,
+                "partners": partners,
+                "productVariant": spec.get("productVariant") or "",
                 "tagline": spec.get("tagline") or "",
                 "courses": courses,
                 "unresolvedCourseIds": missing,

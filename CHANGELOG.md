@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.8] - 2026-09-21
+
+### Fixed
+- Certificate folder rename on Windows SMB no longer leaves `_courdl_tmp_01_` prefixes. Renames retry on Access denied, roll back if a later folder is locked, and skip the temp hop when destinations are free.
+- A failed rename now tells you to close File Explorer on that share instead of dying as an unexpected error.
+
+### Changed
+- Parent folders use the Coursera display name: company when Coursera lists a partner, then Certificate or Specialization (`Google Data Analytics Certificate`, `Microsoft UX Design Certificate`).
+
 ## [0.1.7] - 2026-09-20
 
 ### Fixed
